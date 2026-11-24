@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>.NET Tech Lead — Master Prep Tracker</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --muted:#6b7684; --line:#e3e7ec;
+    --accent:#2b6cb0; --accent2:#eef4fb;
+    --p0:#c0392b; --p0bg:#fdecea; --p1:#b7791f; --p1bg:#fdf6e3; --p2:#55606e; --p2bg:#eef0f3;
+    --gap:#8a4baf; --gapbg:#f4ecfa; --done:#2f8a4e; --donebg:#eaf6ee;
+    --star:#d98324;
+    --shadow:0 1px 2px rgba(20,30,45,.05),0 2px 8px rgba(20,30,45,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--accent)}
+  .wrap{max-width:1040px;margin:0 auto;padding:24px 20px 80px}
+
+  header.app{margin-bottom:18px}
+  header.app h1{font-size:24px;margin:0 0 4px}
+  header.app .sub{color:var(--muted);font-size:13.5px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px;font-size:12.5px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+
+  .dash{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;margin:16px 0 20px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .panel h3{margin:0 0 10px;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+  .bigstat{display:flex;align-items:baseline;gap:10px}
+  .bigstat .num{font-size:30px;font-weight:700}
+  .bigstat .of{color:var(--muted);font-size:14px}
+  .bar{height:10px;border-radius:999px;background:var(--p2bg);overflow:hidden;margin-top:10px}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,#3a7bd5,#2b6cb0);width:0}
+  .ministat{display:flex;justify-content:space-between;font-size:13px;margin:7px 0}
+  .ministat b{font-weight:600}
+  .ministat .mbar{flex:1;margin:0 10px;height:8px;border-radius:999px;background:var(--p2bg);overflow:hidden;align-self:center}
+  .ministat .mbar > i{display:block;height:100%;width:0}
+
+  .controls{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0;margin-bottom:10px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .controls input[type=search]{flex:1;min-width:180px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff}
+  .chip{border:1px solid var(--line);background:#fff;color:var(--ink);padding:6px 11px;border-radius:999px;font-size:12.5px;cursor:pointer;user-select:none}
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:6px 11px;border-radius:8px;font-size:12.5px;cursor:pointer}
+  .btn:hover{background:#f0f2f5}
+  .btn.warn:hover{background:var(--p0bg);border-color:var(--p0);color:var(--p0)}
+
+  .part{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow)}
+  .part > .phead{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;background:linear-gradient(0deg,#fafbfc,#fff)}
+  .part > .phead .pidx{flex:none;padding:3px 8px;border-radius:7px;background:var(--accent2);color:var(--accent);font-weight:700;font-size:12px}
+  .part > .phead h2{font-size:16px;margin:0;flex:1}
+  .part > .phead .pcount{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .part > .phead .chev{color:var(--muted);transition:transform .15s;font-size:13px}
+  .part.collapsed .chev{transform:rotate(-90deg)}
+  .part.collapsed .pbody{display:none}
+  .pbody{padding:4px 16px 14px}
+
+  .domain{border-top:1px solid var(--line);padding:12px 0 6px}
+  .domain:first-child{border-top:none}
+  .domain h4{margin:0 0 8px;font-size:13.5px;display:flex;align-items:center;gap:9px}
+  .domain h4 .anum{flex:none;width:22px;height:22px;border-radius:6px;background:#eef0f3;color:var(--muted);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .domain h4 .dref{font-weight:500;color:var(--muted);font-size:12px}
+  .domain h4 .dprog{margin-left:auto;font-size:11.5px;color:var(--muted);font-weight:500}
+
+  ul.items{list-style:none;margin:0;padding:0}
+  li.item{display:flex;align-items:flex-start;gap:10px;padding:5px 6px;border-radius:7px}
+  li.item:hover{background:#f7f9fb}
+  li.item.done{background:var(--donebg)}
+  li.item.done:hover{background:#e2f1e8}
+  li.item input[type=checkbox]{width:17px;height:17px;margin-top:2px;flex:none;accent-color:var(--done);cursor:pointer}
+  li.item .body{flex:1;min-width:0}
+  li.item .t{cursor:pointer}
+  li.item.done .t{text-decoration:line-through;color:var(--muted)}
+  li.item .h{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}
+  li.item .meta{display:flex;align-items:center;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end;max-width:220px}
+  .pill{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:5px;letter-spacing:.02em}
+  .pill.p0{color:var(--p0);background:var(--p0bg)}
+  .pill.p1{color:var(--p1);background:var(--p1bg)}
+  .pill.p2{color:var(--p2);background:var(--p2bg)}
+  .ref{font-size:10.5px;color:var(--muted);background:#f0f2f5;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ref.gap{color:var(--gap);background:var(--gapbg);border-color:#e6d6f3}
+  .flag{border:none;background:none;cursor:pointer;color:#cfd5dc;font-size:14px;line-height:1;padding:0 2px}
+  .flag.on{color:var(--star)}
+  .explain{font-size:10.5px;color:var(--accent);background:var(--accent2);border:1px solid #d6e4f5;border-radius:5px;padding:1px 7px;text-decoration:none;white-space:nowrap}
+  .explain:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  .empty{display:none;color:var(--muted);text-align:center;padding:40px;font-size:14px}
+  footer.app{color:var(--muted);font-size:12px;text-align:center;margin-top:24px}
+
+  @media (max-width:720px){
+    .dash{grid-template-columns:1fr}
+    li.item .meta{max-width:none}
+  }
+
+  @media print{
+    :root{--bg:#fff}
+    body{font-size:10.5pt;color:#000}
+    .wrap{max-width:none;padding:0}
+    .controls,.flag,.explain,.dash .bar{display:none !important}
+    .dash{grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 10px}
+    .panel{box-shadow:none;border:1px solid #bbb;break-inside:avoid}
+    .part{box-shadow:none;border:1px solid #bbb;break-inside:avoid;margin-bottom:8px}
+    .part.collapsed .pbody{display:block !important}
+    .chev{display:none}
+    .pbody{display:block !important}
+    li.item{break-inside:avoid;padding:2px 0}
+    li.item:hover,li.item.done{background:none}
+    li.item input[type=checkbox]{-webkit-appearance:none;appearance:none;width:11px;height:11px;border:1.2px solid #333;border-radius:2px;position:relative}
+    li.item.done input[type=checkbox]::after{content:"\2713";position:absolute;top:-4px;left:0px;font-size:11px}
+    li.item.done .t{text-decoration:none;color:#000}
+    .domain h4 .dprog{display:none}
+    .part > .phead{background:none;border-bottom:1px solid #ccc}
+    header.app h1{font-size:18pt}
+    a{color:#000;text-decoration:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="app">
+    <h1>.NET Tech Lead — Master Prep Tracker</h1>
+    <div class="sub">.NET Tech Lead interview prep · 17 focused topics / 38 areas, wired to the 314-card deck &amp; extra Tech-Lead topics (now incl. AI &amp; AWS). Progress saves automatically in this browser.</div>
+    <div class="legend">
+      <span><span class="pill p0">P0</span> must-know / likely asked</span>
+      <span><span class="pill p1">P1</span> expected depth</span>
+      <span><span class="pill p2">P2</span> nice-to-have</span>
+      <span><span class="ref">#NN</span> flashcard in your CSV deck</span>
+      <span><span class="ref gap">&#9733; study</span> gap — not in your deck yet</span>
+      <span><span class="flag on">&#9873;</span> flag to revisit</span>
+    </div>
+  </header>
+
+  <div class="dash">
+    <div class="panel">
+      <h3>Overall progress</h3>
+      <div class="bigstat"><span class="num" id="ovNum">0</span><span class="of">/ <span id="ovTot">0</span> topics done (<span id="ovPct">0</span>%)</span></div>
+      <div class="bar"><i id="ovBar"></i></div>
+      <div class="ministat" style="margin-top:12px">
+        <b style="color:var(--p0)">P0 must-know</b>
+        <span class="mbar"><i id="p0bar" style="background:var(--p0)"></i></span>
+        <span id="p0txt" style="font-variant-numeric:tabular-nums">0/0</span>
+      </div>
+      <div class="ministat">
+        <b style="color:var(--gap)">&#9733; Gaps covered</b>
+        <span class="mbar"><i id="gapbar" style="background:var(--gap)"></i></span>
+        <span id="gaptxt" style="font-variant-numeric:tabular-nums">0/0</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>By part</h3>
+      <div id="sectionStats"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <input type="search" id="search" placeholder="Search topics… (e.g. PKCE, outbox, W3C trace context)">
+    <span class="chip active" data-filter="all">All</span>
+    <span class="chip" data-filter="p0">P0</span>
+    <span class="chip" data-filter="p1">P1</span>
+    <span class="chip" data-filter="p2">P2</span>
+    <span class="chip" data-filter="gap">&#9733; Gaps</span>
+    <span class="chip" data-filter="todo">Unchecked</span>
+    <span class="chip" data-filter="flag">Flagged</span>
+    <button class="btn" id="expandAll">Expand all</button>
+    <button class="btn" id="collapseAll">Collapse all</button>
+    <button class="btn" id="printBtn">&#128424; Print</button>
+    <button class="btn warn" id="resetBtn">Reset</button>
+  </div>
+
+  <div id="list"></div>
+  <div class="empty" id="empty">No topics match your search / filter.</div>
+
+  <footer class="app">
+    Built from your flashcard deck &amp; checklist · open this file any time to continue · print for a paper checklist.
+  </footer>
+</div>
+
+<script src="tracker-data.js"></script>
+<script>
+/* ============================================================
+   DATA MODEL  —  5 parts, 34 areas (+ bonus)
+   t=topic, p=priority(0/1/2), c=deck card #, g=gap(study separately), h=hint
+   ============================================================ */
+const DATA = window.TRACKER_DATA;
+
+/* ============================================================
+   STABLE IDS  (content-based, so restructuring never loses progress)
+   ============================================================ */
+/* ids assigned in tracker-data.js */
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const KEY="tlprep:v2";
+let state=JSON.parse(localStorage.getItem(KEY)||"{}"); // id -> {d,f}
+let filter="all", query="";
+function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+function st(id){ return state[id]||{d:false,f:false}; }
+function toggleDone(id,v){ const s=st(id); s.d=v; state[id]=s; save(); }
+function setFlag(id,v){ const s=st(id); s.f=v; state[id]=s; save(); }
+
+const listEl=document.getElementById("list");
+
+function build(){
+  listEl.innerHTML="";
+  let areaNo=0;
+  DATA.forEach((part,pi)=>{
+    const partEl=document.createElement("section");
+    partEl.className="part"; partEl.dataset.pi=pi;
+    const head=document.createElement("div");
+    head.className="phead";
+    head.innerHTML='<span class="pidx">'+(pi+1)+'</span>'+
+                   '<h2>'+part.part.replace(/^Part \d+ — /,'')+'</h2>'+
+                   '<span class="pcount" data-role="pcount"></span>'+
+                   '<span class="chev">&#9660;</span>';
+    head.addEventListener("click",()=>partEl.classList.toggle("collapsed"));
+    partEl.appendChild(head);
+
+    const body=document.createElement("div"); body.className="pbody";
+    part.domains.forEach(dom=>{
+      areaNo++;
+      const domEl=document.createElement("div"); domEl.className="domain";
+      const h4=document.createElement("h4");
+      h4.innerHTML='<span class="anum">'+areaNo+'</span><span>'+dom.name+'</span>'+
+                   (dom.ref?'<span class="dref">'+dom.ref+'</span>':'')+
+                   '<span class="dprog" data-role="dprog"></span>';
+      domEl.appendChild(h4);
+
+      const ul=document.createElement("ul"); ul.className="items";
+      dom.items.forEach(it=>{
+        const id=it._id, s=st(id);
+        const li=document.createElement("li");
+        li.className="item"+(s.d?" done":"");
+        li.dataset.id=id; li.dataset.p=it.p; li.dataset.gap=it.g?"1":"0";
+        li.dataset.text=(it.t+" "+(it.h||"")).toLowerCase();
+
+        const cb=document.createElement("input");
+        cb.type="checkbox"; cb.checked=s.d;
+        cb.addEventListener("change",()=>{ toggleDone(id,cb.checked); li.classList.toggle("done",cb.checked); refreshStats(); });
+
+        const bodyDiv=document.createElement("div"); bodyDiv.className="body";
+        const tspan=document.createElement("span"); tspan.className="t"; tspan.textContent=it.t;
+        tspan.addEventListener("click",()=>{ cb.checked=!cb.checked; cb.dispatchEvent(new Event("change")); });
+        bodyDiv.appendChild(tspan);
+        if(it.h){ const hs=document.createElement("span"); hs.className="h"; hs.textContent=it.h; bodyDiv.appendChild(hs); }
+
+        const meta=document.createElement("div"); meta.className="meta";
+        meta.innerHTML='<span class="pill p'+it.p+'">P'+it.p+'</span>'+
+          (it.g?'<span class="ref gap">&#9733; study</span>':(it.c?'<span class="ref">#'+it.c+'</span>':''));
+        const flag=document.createElement("button");
+        flag.className="flag"+(s.f?" on":""); flag.title="Flag to revisit"; flag.innerHTML="&#9873;";
+        flag.addEventListener("click",e=>{ e.stopPropagation(); const nv=!st(id).f; setFlag(id,nv); flag.classList.toggle("on",nv); applyFilter(); });
+        const explain=document.createElement("a");
+        explain.className="explain"; explain.textContent="Explain";
+        explain.href="explanations.html?id="+encodeURIComponent(id);
+        explain.target="_blank"; explain.rel="noopener"; explain.title="Open a deep-dive explanation";
+        explain.addEventListener("click",e=>e.stopPropagation());
+        meta.appendChild(explain); meta.appendChild(flag);
+
+        li.appendChild(cb); li.appendChild(bodyDiv); li.appendChild(meta);
+        ul.appendChild(li);
+      });
+      domEl.appendChild(ul); body.appendChild(domEl);
+    });
+    partEl.appendChild(body); listEl.appendChild(partEl);
+  });
+  refreshStats(); applyFilter();
+}
+
+function refreshStats(){
+  let total=0,done=0,p0t=0,p0d=0,gapt=0,gapd=0;
+  DATA.forEach(part=>part.domains.forEach(dom=>dom.items.forEach(it=>{
+    const s=st(it._id); total++; if(s.d)done++;
+    if(it.p===0){p0t++; if(s.d)p0d++;}
+    if(it.g){gapt++; if(s.d)gapd++;}
+  })));
+  document.getElementById("ovNum").textContent=done;
+  document.getElementById("ovTot").textContent=total;
+  const pct=total?Math.round(done/total*100):0;
+  document.getElementById("ovPct").textContent=pct;
+  document.getElementById("ovBar").style.width=pct+"%";
+  document.getElementById("p0txt").textContent=p0d+"/"+p0t;
+  document.getElementById("p0bar").style.width=(p0t?Math.round(p0d/p0t*100):0)+"%";
+  document.getElementById("gaptxt").textContent=gapd+"/"+gapt;
+  document.getElementById("gapbar").style.width=(gapt?Math.round(gapd/gapt*100):0)+"%";
+
+  const sc=document.getElementById("sectionStats"); sc.innerHTML="";
+  DATA.forEach((part,pi)=>{
+    let t=0,d=0;
+    part.domains.forEach(dom=>dom.items.forEach(it=>{ t++; if(st(it._id).d)d++; }));
+    const p=t?Math.round(d/t*100):0;
+    const row=document.createElement("div"); row.className="ministat";
+    row.innerHTML='<b style="flex:none">'+(pi+1)+'. '+part.part.replace(/^Part \d+ — /,'')+'</b>'+
+      '<span class="mbar"><i style="width:'+p+'%;background:linear-gradient(90deg,#3a7bd5,#2b6cb0)"></i></span>'+
+      '<span style="flex:none;font-variant-numeric:tabular-nums">'+d+'/'+t+'</span>';
+    sc.appendChild(row);
+  });
+
+  document.querySelectorAll(".part").forEach(partEl=>{
+    const pi=+partEl.dataset.pi; let t=0,d=0;
+    DATA[pi].domains.forEach(dom=>dom.items.forEach(it=>{ t++; if(st(it._id).d)d++; }));
+    partEl.querySelector('[data-role=pcount]').textContent=d+" / "+t;
+    partEl.querySelectorAll(".domain").forEach((domEl,di)=>{
+      let dt=0,dd=0;
+      DATA[pi].domains[di].items.forEach(it=>{ dt++; if(st(it._id).d)dd++; });
+      const pr=domEl.querySelector('[data-role=dprog]'); if(pr) pr.textContent=dd+"/"+dt;
+    });
+  });
+}
+
+function applyFilter(){
+  let any=false;
+  document.querySelectorAll(".part").forEach(partEl=>{
+    let pv=false;
+    partEl.querySelectorAll(".domain").forEach(domEl=>{
+      let dv=false;
+      domEl.querySelectorAll("li.item").forEach(li=>{
+        const s=st(li.dataset.id); let ok=true;
+        if(filter==="p0")ok=li.dataset.p==="0";
+        else if(filter==="p1")ok=li.dataset.p==="1";
+        else if(filter==="p2")ok=li.dataset.p==="2";
+        else if(filter==="gap")ok=li.dataset.gap==="1";
+        else if(filter==="todo")ok=!s.d;
+        else if(filter==="flag")ok=!!s.f;
+        if(ok&&query)ok=li.dataset.text.indexOf(query)>-1;
+        li.style.display=ok?"":"none"; if(ok)dv=true;
+      });
+      domEl.style.display=dv?"":"none"; if(dv)pv=true;
+    });
+    partEl.style.display=pv?"":"none"; if(pv)any=true;
+  });
+  document.getElementById("empty").style.display=any?"none":"block";
+}
+
+document.querySelectorAll(".chip").forEach(ch=>ch.addEventListener("click",()=>{
+  document.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
+  ch.classList.add("active"); filter=ch.dataset.filter; applyFilter();
+}));
+document.getElementById("search").addEventListener("input",e=>{ query=e.target.value.trim().toLowerCase(); applyFilter(); });
+document.getElementById("expandAll").addEventListener("click",()=>document.querySelectorAll(".part").forEach(p=>p.classList.remove("collapsed")));
+document.getElementById("collapseAll").addEventListener("click",()=>document.querySelectorAll(".part").forEach(p=>p.classList.add("collapsed")));
+document.getElementById("printBtn").addEventListener("click",()=>window.print());
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  if(confirm("Clear all your checkmarks and flags? This cannot be undone.")){ state={}; save(); build(); }
+});
+
+build();
+</script>
+</body>
+</html>

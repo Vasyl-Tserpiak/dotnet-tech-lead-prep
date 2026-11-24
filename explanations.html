@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deep dive — .NET Tech Lead Prep</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1b2430; --muted:#6b7684; --line:#e3e7ec;
+    --accent:#2b6cb0; --accent2:#eef4fb;
+    --p0:#c0392b; --p0bg:#fdecea; --p1:#b7791f; --p1bg:#fdf6e3; --p2:#55606e; --p2bg:#eef0f3;
+    --gap:#8a4baf; --gapbg:#f4ecfa; --ok:#2f8a4e;
+    --code:#0f172a; --codebg:#f3f5f8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font:15.5px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent)}
+  .topbar{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:10px 18px;display:flex;align-items:center;gap:14px}
+  .topbar a.back{font-size:13.5px;text-decoration:none;font-weight:600}
+  .topbar .crumb{font-size:12.5px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .topbar button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;font-size:12.5px;cursor:pointer}
+  .topbar button:hover{background:#f0f2f5}
+
+  .shell{max-width:1120px;margin:0 auto;padding:20px 18px 80px;display:grid;grid-template-columns:260px 1fr;gap:26px}
+  aside{position:sticky;top:60px;align-self:start;max-height:calc(100vh - 80px);overflow:auto}
+  aside h3{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:4px 0 8px}
+  aside ul{list-style:none;margin:0;padding:0}
+  aside li a{display:flex;gap:8px;align-items:baseline;text-decoration:none;color:var(--ink);font-size:13px;padding:5px 8px;border-radius:7px;border-left:3px solid transparent}
+  aside li a:hover{background:#eef2f7}
+  aside li a.cur{background:var(--accent2);border-left-color:var(--accent);font-weight:600;color:var(--accent)}
+  aside li a .dot{flex:none;width:7px;height:7px;border-radius:50%;margin-top:7px;border:1.5px solid var(--muted)}
+  aside li a .dot.full{background:var(--ok);border-color:var(--ok)}
+
+  main{min-width:0}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 14px}
+  .pill{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px}
+  .pill.p0{color:var(--p0);background:var(--p0bg)}
+  .pill.p1{color:var(--p1);background:var(--p1bg)}
+  .pill.p2{color:var(--p2);background:var(--p2bg)}
+  .tag{font-size:11px;color:var(--muted);background:#f0f2f5;border:1px solid var(--line);border-radius:5px;padding:2px 7px}
+  .tag.gap{color:var(--gap);background:var(--gapbg);border-color:#e6d6f3}
+  h1.title{font-size:25px;line-height:1.25;margin:4px 0 6px}
+
+  .article{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 26px 24px;box-shadow:0 1px 2px rgba(20,30,45,.05),0 2px 10px rgba(20,30,45,.05)}
+  .article h2{font-size:17px;margin:24px 0 8px;padding-top:10px;border-top:1px solid var(--line)}
+  .article h2:first-of-type{border-top:none}
+  .article p{margin:9px 0}
+  .article .lead{font-size:17px;color:var(--ink);background:var(--accent2);border:1px solid #dce8f6;border-radius:10px;padding:12px 15px;margin:14px 0}
+  .article ul,.article ol{margin:9px 0;padding-left:22px}
+  .article li{margin:5px 0}
+  .article code{background:var(--codebg);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font:13px ui-monospace,Consolas,Menlo,monospace}
+  .article pre{background:var(--code);color:#e6edf3;border-radius:10px;padding:14px 16px;overflow:auto;margin:12px 0}
+  .article pre code{background:none;border:none;color:inherit;padding:0;font-size:13px;line-height:1.5}
+  .article table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+  .article th,.article td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  .article th{background:#f4f6f9}
+  .say{background:#eafaf0;border:1px solid #c7ecd4;border-left:4px solid var(--ok);border-radius:8px;padding:11px 14px;margin:14px 0}
+  .say strong{color:var(--ok)}
+  .warn{background:var(--p0bg);border:1px solid #f4c9c3;border-left:4px solid var(--p0);border-radius:8px;padding:11px 14px;margin:14px 0}
+  .warn strong{color:var(--p0)}
+  .comingsoon{color:var(--muted);text-align:center;padding:26px;border:1px dashed var(--line);border-radius:12px;margin-top:16px}
+
+  .pager{display:flex;justify-content:space-between;gap:12px;margin-top:18px}
+  .pager a{flex:1;max-width:48%;text-decoration:none;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 14px;color:var(--ink)}
+  .pager a:hover{background:#f0f4f9;border-color:var(--accent)}
+  .pager a.next{text-align:right}
+  .pager a .k{display:block;font-size:11px;color:var(--muted)}
+  .pager a.disabled{opacity:.4;pointer-events:none}
+
+  @media (max-width:860px){ .shell{grid-template-columns:1fr} aside{position:static;max-height:none;max-width:none} }
+  @media print{
+    body{background:#fff}
+    .topbar,aside,.pager{display:none}
+    .shell{display:block;max-width:none;padding:0}
+    .article{box-shadow:none;border:none;padding:0}
+    .article pre{background:#f3f5f8;color:#0f172a;border:1px solid #ccc}
+    a{color:#000;text-decoration:none}
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="index.html">&#8592; All topics</a>
+    <span class="crumb" id="crumb"></span>
+    <button id="printBtn">&#128424; Print</button>
+  </div>
+  <div class="shell">
+    <aside id="aside"></aside>
+    <main id="main"></main>
+  </div>
+
+<script src="tracker-data.js"></script>
+<script src="explanations-data.js"></script>
+<script>
+  const EXP = window.EXPLANATIONS || {};
+  const DATA = window.TRACKER_DATA || [];
+  const params = new URLSearchParams(location.search);
+  const id = params.get("id");
+
+  // locate the item + its context
+  let found=null;
+  DATA.forEach((part,pi)=>part.domains.forEach((dom,di)=>dom.items.forEach((it,ii)=>{
+    if(it._id===id) found={part,dom,it,ii};
+  })));
+
+  const main=document.getElementById("main");
+  const aside=document.getElementById("aside");
+  const crumb=document.getElementById("crumb");
+  document.getElementById("printBtn").addEventListener("click",()=>window.print());
+
+  function esc(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  if(!found){
+    crumb.textContent="Topic not found";
+    main.innerHTML='<div class="article"><h1 class="title">Topic not found</h1>'+
+      '<p>No topic matches this link. Head back to the tracker and pick a topic.</p>'+
+      '<p><a href="index.html">&#8592; Back to the tracker</a></p></div>';
+  } else {
+    const {part,dom,it,ii}=found;
+    document.title = it.t + " — deep dive";
+    crumb.textContent = part.part + "  ›  " + dom.name;
+
+    // sidebar: all items in this area
+    let side='<h3>'+esc(dom.name)+'</h3><ul>';
+    dom.items.forEach(sib=>{
+      const has = !!EXP[sib._id];
+      side+='<li><a href="explanations.html?id='+encodeURIComponent(sib._id)+'"'+(sib._id===id?' class="cur"':'')+'>'+
+            '<span class="dot'+(has?' full':'')+'" title="'+(has?'deep-dive written':'summary only')+'"></span>'+
+            '<span>'+esc(sib.t)+'</span></a></li>';
+    });
+    side+='</ul>';
+    aside.innerHTML=side;
+
+    // meta row
+    const pr='<span class="pill p'+it.p+'">P'+it.p+'</span>';
+    const ref = it.g ? '<span class="tag gap">&#9733; not in your deck yet</span>'
+                     : (it.c ? '<span class="tag">deck card #'+it.c+'</span>' : '');
+    const area='<span class="tag">'+esc(dom.name)+'</span>';
+
+    let bodyHtml;
+    if(EXP[id]){
+      bodyHtml = EXP[id];
+    } else {
+      bodyHtml = '<div class="comingsoon"><p style="font-size:16px;margin-top:0"><strong>Deep-dive coming soon.</strong></p>'+
+        (it.h?'<p><strong>Quick take:</strong> '+esc(it.h)+'</p>':'')+
+        (it.c?'<p>For now, see flashcard <strong>#'+it.c+'</strong> in <em>your flashcard deck</em>.</p>':'')+
+        '</div>';
+    }
+
+    // prev / next within the area
+    const prev=dom.items[ii-1], next=dom.items[ii+1];
+    const pager='<div class="pager">'+
+      (prev?'<a class="prev" href="explanations.html?id='+encodeURIComponent(prev._id)+'"><span class="k">&#8592; Previous</span>'+esc(prev.t)+'</a>'
+           :'<a class="prev disabled"><span class="k">&#8592; Previous</span>—</a>')+
+      (next?'<a class="next" href="explanations.html?id='+encodeURIComponent(next._id)+'"><span class="k">Next &#8594;</span>'+esc(next.t)+'</a>'
+           :'<a class="next disabled"><span class="k">Next &#8594;</span>—</a>')+
+      '</div>';
+
+    main.innerHTML='<div class="meta">'+pr+ref+area+'</div>'+
+      '<h1 class="title">'+esc(it.t)+'</h1>'+
+      '<div class="article">'+bodyHtml+'</div>'+pager;
+  }
+</script>
+</body>
+</html>
