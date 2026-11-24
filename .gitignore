@@ -1,4 +1,5 @@
 *.csv
 Tech Lead Prep.html
+.astra-*
 .DS_Store
 Thumbs.db

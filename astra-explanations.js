@@ -1,7 +1,7 @@
-// Original Astra Medium explanations. Each entry pairs a worked example with its engineering implications.
+// Independent interview walkthroughs keyed by the tracker's stable topic IDs.
 window.ASTRA_EXPLANATIONS = {
   "caching-strategies__cache-aside-lazy-loading-read-on-miss-load-populate": {
-    overview: "A product page asks for price 42. On a cache hit the application returns it immediately. On a miss it reads the price table and stores the result with an expiry. Only products people request occupy cache space.",
+    overview: "A product page needs the price of product 42. On a cache hit the application returns it immediately. On a miss it reads the price table and stores the result with an expiry. Only products people request occupy cache space.",
     question: "Why can deleting a key after commit still serve the old price?",
     walkthrough: "Follow two requests through the miss path. Reader A obtains price 10 from SQL and pauses before filling Redis. Writer B commits price 12 and deletes the key. A resumes and stores 10 with a fresh TTL. Deleting after commit avoids invalidating before a rollback, but cannot coordinate those separate systems. If the page tolerates a short stale interval, keep the design simple. For a binding quote, check the authoritative price or version when accepting the order.",
     example: "A: GET price → miss → SQL returns (10, v7)\nB: SQL commits (12, v8) → DEL price\nA: SET price (10, v7) with TTL → next cache hit returns 10",
@@ -57,6 +57,7 @@ window.ASTRA_EXPLANATIONS = {
     implications: "For a conditional update spanning several operations, WATCH can detect interference and let the client retry. A short script can check and update on the server in one execution. Bound its runtime because other clients share that server."
   },
   "redis-caching-problems__redis-transactions-multi-exec-watch-lua-scripts": {
+    source: { title: "Redis transaction semantics", url: "https://redis.io/docs/latest/develop/using-commands/transactions/" },
     overview: "MULTI queues commands and EXEC runs the queue without another client interleaving commands. A runtime error in one queued command can leave other commands applied. Design for that failure model.",
     question: "Which errors prevent the whole transaction from executing?",
     walkthrough: "A command rejected during queuing, for example due to invalid arity, can make EXEC refuse the transaction. A validly queued command can instead fail during execution because the key has an incompatible type. Redis then returns an error in that command’s result slot and continues with other queued commands. WATCH adds another outcome: another update invalidates the watched version and EXEC applies none of the queued changes.",
@@ -1198,6 +1199,7 @@ window.ASTRA_EXPLANATIONS = {
     implications: "Separate SaveChanges calls may need an explicit shared transaction. Publishing an external event still needs coordination such as an outbox even when every SQL write is atomic."
   },
   "ef-core-data-access__optimistic-concurrency-in-ef-rowversion": {
+    source: { title: "EF Core concurrency conflict handling", url: "https://learn.microsoft.com/en-us/ef/core/saving/concurrency" },
     overview: "Configure a rowversion as an EF concurrency token. EF includes the original token in the update predicate. When no row matches, it reports a concurrency conflict instead of silently overwriting newer data.",
     question: "Which values do you compare after DbUpdateConcurrencyException?",
     walkthrough: "EF tracks the token originally read and includes it in the update or delete predicate. When the expected row is absent, compare original values, proposed application values and current database values. Nonoverlapping changes may be mergeable, but two edits to the same business field need a domain policy. A deleted row requires a separate decision. On disconnected HTTP edits, preserve the token the user actually saw.",
@@ -1527,6 +1529,7 @@ window.ASTRA_EXPLANATIONS = {
     implications: "Old snapshots can pin obsolete versions. Long-running transactions affect maintenance and storage even when their own reads appear cheap."
   },
   "postgresql__isolation-levels-serializable-ssi": {
+    source: { title: "PostgreSQL transaction isolation", url: "https://www.postgresql.org/docs/current/transaction-iso.html" },
     overview: "PostgreSQL read committed can use a new snapshot per statement. Repeatable read retains a snapshot but can allow write skew. Serializable snapshot isolation tracks dependencies that could produce a nonserializable outcome.",
     question: "Why can PostgreSQL serializable abort transactions updating different rows?",
     walkthrough: "SSI tracks read/write dependencies that could form a dangerous serialization pattern. It can abort a transaction to preserve an outcome consistent with some serial execution, even when the conflicting writers target different rows. Repeatable read in PostgreSQL already prevents a changing snapshot and ordinary phantom reads, yet can allow write skew. Keep serializable transactions retryable from their first read.",
@@ -1722,296 +1725,610 @@ window.ASTRA_EXPLANATIONS = {
     example: "Worker disconnects after processing row 10 while rows 11–14 commit. On reconnect, scan for outstanding work first. Depending only on the next notification would leave the four already committed rows waiting indefinitely.",
     implications: "Store durable work in a table and let listeners query it after waking or reconnecting. This separates fast notification from the record of what still needs processing."
   },
-  "distributed-systems-architecture__microservices-vs-modular-monolith-when-to-split": [
-    "Start with a boundary that has coherent data ownership and a reason for independent change. Modules in one deployment can enforce that boundary while preserving local calls and database transactions.",
-    "Extract a service when independent scaling, release cadence or team ownership offsets network failure, observability and consistency costs. A service that must deploy in lockstep with its neighbors is a weak candidate."
-  ],
-  "distributed-systems-architecture__event-driven-architecture-pros-cons": [
-    "Publishing OrderPlaced lets billing and fulfillment react independently. The publisher can finish without waiting for either consumer, while each consumer may temporarily see a different stage of the order.",
-    "Design event identity, schema evolution and replay deliberately. Trace a single order through consumers and define how support sees a workflow that stalled halfway."
-  ],
-  "distributed-systems-architecture__cqrs-event-sourcing-what-when-worth-it": [
-    "CQRS separates the models used to change state and to read it. Event sourcing stores a sequence of domain events as the authoritative history. They can be adopted independently.",
-    "An account statement may benefit from an event history and a fast balance projection. Budget projection rebuilds, schema evolution and the lag before a write appears in a read model."
-  ],
-  "distributed-systems-architecture__saga-orchestration-vs-choreography": [
-    "A travel booking requires a flight and a hotel across independent systems. A saga records progress and uses compensating actions when later steps fail. An orchestrator directs the sequence, while choreography distributes reactions among participants.",
-    "Compensation has business meaning. Cancelling a reservation may incur a fee. Persist transitions and make forward and compensating actions safe to retry."
-  ],
-  "distributed-systems-architecture__cap-theorem-in-practical-terms": [
-    "During a network partition, two isolated replicas cannot both accept every request and guarantee that all clients observe the latest single value. A system must decide which operations wait or fail.",
-    "Separate browsing from spending a gift-card balance. A stale description may be acceptable while two independently accepted withdrawals can violate the balance invariant."
-  ],
-  "distributed-systems-architecture__two-phase-commit-why-avoided-eventual-consistency": [
-    "Two-phase commit asks participants to prepare, then coordinates a common commit decision. After preparing, participants may have to retain resources while waiting for an uncertain outcome to be resolved.",
-    "When the business permits intermediate states, local commits plus durable events and compensation reduce cross-service coupling. State how long inconsistency can last and how abandoned work is repaired."
-  ],
-  "distributed-systems-architecture__monolith-service-migration-strangler-fig-anti-corruption-layer": [
-    "Route a bounded operation from the monolith to a new service while other traffic still follows the old path. An anti-corruption layer translates the old model into the new service’s terms.",
-    "Name the authoritative writer during every migration stage. Compare outputs and retain a rollback route that accounts for writes already accepted by the new system."
-  ],
-  "distributed-systems-architecture__distributed-rate-limiting-resilience": [
-    "Four replicas each enforcing a hundred requests per second can collectively admit four hundred. A shared atomic limiter can enforce a fleet-wide quota, at the cost of a dependency on its latency and availability.",
-    "Consider leasing small local budgets to reduce coordination. Specify how much overshoot is acceptable and what each feature does when it cannot reach the quota store."
-  ],
-  "system-design-fundamentals__how-to-approach-any-system-design-question": [
-    "Start a design discussion with one concrete user operation and the guarantee it needs. For example, clarify whether a newly posted message must appear immediately on the sender’s second device.",
-    "Sketch the simplest write and read paths, estimate their load, then stress the costliest dependency or strongest invariant. State how you would observe and recover from its failure."
-  ],
-  "system-design-fundamentals__back-of-the-envelope-estimation": [
-    "One hundred million reads per day averages roughly 1,160 per second. A tenfold peak and a 10 KB response imply roughly 116 MB per second of peak response payload before overhead.",
-    "Keep units visible and distinguish peak from average. Vary the two least certain assumptions to see whether they actually change the architecture decision."
-  ],
-  "system-design-fundamentals__vertical-vs-horizontal-scaling": [
-    "Vertical scaling increases capacity of one node and can preserve simple local coordination. Horizontal scaling distributes work across nodes but requires routing and handling node loss or uneven load.",
-    "Identify what can be split. Stateless request handlers scale out easily until a shared database saturates. Adding more callers can make that bottleneck worse."
-  ],
-  "system-design-fundamentals__multi-layer-caching-browser-cdn-app-redis-db": [
-    "A browser can reuse one user’s response, a CDN can serve many nearby readers, an app can cache computed values and Redis can share results across app replicas. Each layer has its own cache key and expiry.",
-    "Trace a content update through every layer. Clearing Redis does little if an edge still serves the old response. Keep private responses outside shared cache entries."
-  ],
-  "system-design-fundamentals__sql-vs-nosql-how-to-choose": [
-    "Begin with data access and invariants. A ledger with multi-row constraints and ad hoc reconciliation queries fits a relational model. A predictable key-based workload may suit a partitioned key-value store.",
-    "Test the hardest transaction, query and repartitioning requirement. Choosing a document database for flexible fields can become costly if every important read requires cross-document joins."
-  ],
-  "system-design-fundamentals__quorum-r-w-n": [
-    "With three fixed replicas, writing to two and reading from two guarantees the sets intersect. To return the newest accepted value the read protocol must interpret versions and handle competing writes correctly.",
-    "Quorum overlap by itself does not guarantee linearizability. Discuss concurrent writes, failed operations and whether the system uses substitute replicas during outages."
-  ],
-  "system-design-fundamentals__cap-pacelc-per-feature-consistency": [
-    "CAP describes the choice during partition. PACELC also asks what latency a system pays for stronger consistency while communication works. A cross-region synchronous write illustrates that everyday cost.",
-    "Set expectations per feature. A stock reservation may justify coordination, while an approximate popularity count can accept local writes and later reconciliation."
-  ],
-  "system-design-fundamentals__consistent-hashing-hot-partitions": [
-    "Consistent hashing assigns ranges in a hash space so a membership change moves a subset of keys. Virtual nodes can improve distribution across machines.",
-    "Hashing spreads many keys but cannot divide a single extremely popular key. Inspect per-key traffic and add replication, caching or a different key design for skew."
-  ],
-  "system-design-fundamentals__designing-for-high-availability-the-9s": [
-    "A 99.9% monthly time-based objective permits about 43 minutes of unavailability in a 30-day month. Several mandatory dependencies can consume that budget quickly, especially when failures are correlated.",
-    "Define success from the client’s perspective and exercise failover under load. Redundancy only helps when surviving capacity, routing and recovery procedures work together."
-  ],
-  "system-design-fundamentals__multi-region-dr-rpo-rto": [
-    "RPO bounds acceptable data loss measured in time. RTO bounds time to restore service. A daily backup might support a long RPO even if restoring it is fast.",
-    "Walk through a regional loss, including detection, authority transfer, data recovery and traffic movement. Measure both the latest recovered write and the time real clients can complete requests."
-  ],
-  "system-design-fundamentals__backpressure-load-shedding": [
-    "When arrivals exceed service capacity, unbounded queues turn excess load into memory use and increasingly stale responses. Backpressure signals producers to slow down. Load shedding rejects selected work early.",
-    "Reserve capacity for critical requests and bound waiting by deadlines. Monitor successful throughput and queue age because accepting more requests can reduce useful completions."
-  ],
-  "system-design-fundamentals__push-vs-pull-websockets-sse-long-polling": [
-    "Polling repeatedly asks for changes. Long polling holds the request until an update or timeout. SSE offers an HTTP server-to-client stream, while WebSockets allow both endpoints to send messages over a persistent connection.",
-    "Choose using update frequency, direction and reconnect needs. Assign event IDs and a recovery path when losing a live connection must not lose the user’s data."
-  ],
-  "system-design-fundamentals__bloom-filter-what-when": [
-    "A Bloom filter sets several bits for each inserted key. An unset required bit proves absence under the filter’s assumptions. All bits set means the key may exist and merits an authoritative lookup.",
-    "Size the filter for expected insertions and false-positive cost. A stale filter missing recent inserts can incorrectly suppress a real lookup even if the data structure itself behaves correctly."
-  ],
-  "system-design-fundamentals__distributed-unique-id-generator-snowflake": [
-    "A Snowflake-style ID combines time, worker identity and a counter, allowing independent workers to generate roughly time-ordered identifiers without a database round trip per ID.",
-    "Allocate worker identities uniquely and define behavior for clock reversal and counter exhaustion. Ordering across machines reflects clock assumptions and cannot establish a strict causal history."
-  ],
-  "system-design-fundamentals__when-to-put-a-message-queue-in-the-design": [
-    "If a report takes thirty seconds, accept the request, persist a job and return a status identifier. A queue lets workers absorb a temporary burst at a controlled rate.",
-    "Design deduplication, retention, cancellation and progress reporting. An indefinitely growing queue signals insufficient capacity or an overly broad acceptance policy."
-  ],
-  "data-sharding-partitioning-replication__sharding-choosing-a-shard-key-avoiding-hotspots": [
-    "A tenant-based shard key keeps one tenant’s data together, which makes many queries local. A single very large tenant can still dominate one shard even if tenant counts look balanced.",
-    "Analyze bytes, writes and peak traffic per key. Plan an escape route for outliers, such as splitting a tenant by a secondary key where its transactions allow that split."
-  ],
-  "data-sharding-partitioning-replication__partitioning-range-vs-hash-vs-directory-horizontal-vs-vertical": [
-    "Range partitioning supports locality for ordered scans, hash partitioning spreads many independent keys, and a directory explicitly maps keys to locations. Horizontal partitioning divides rows, while vertical partitioning divides fields or related groups.",
-    "Use the dominant access path as a test. An ordered time key can simplify retention yet route nearly all new writes to the latest range."
-  ],
-  "data-sharding-partitioning-replication__replication-leader-follower-synchronous-vs-asynchronous": [
-    "A leader orders writes and followers replay them. Waiting for replication before acknowledging can reduce potential data loss, while asynchronous acknowledgement typically reduces write latency.",
-    "Specify what “replicated” means for the chosen system, such as received, durably flushed or applied. A replica can have received a change before a query there can observe it."
-  ],
-  "data-sharding-partitioning-replication__replication-topologies-single-leader-multi-leader-leaderless": [
-    "Single-leader replication centralizes write order. Multi-leader accepts writes at several leaders and needs conflict handling. Leaderless systems distribute coordination across replicas and often use quorums and repair.",
-    "Walk through two clients updating the same field during disconnection. Pick a conflict outcome the domain can tolerate before choosing the topology."
-  ],
-  "data-sharding-partitioning-replication__read-replicas-replication-lag-read-your-writes": [
-    "A user updates a profile and immediately reloads it from a lagging replica. The old name looks like a failed save even though the primary committed successfully.",
-    "Route that user’s read to the primary or wait for a replica to reach the write position. A fixed delay is only a heuristic and breaks under unusually large lag."
-  ],
-  "data-sharding-partitioning-replication__rebalancing-resharding-with-consistent-hashing": [
-    "Adding a node to a hash ring changes ownership of certain ranges. Existing data in those ranges must be moved while reads and writes continue. The routing algorithm alone does not transfer any bytes.",
-    "Version routing metadata, copy data, catch up concurrent writes and cut over with verification. Throttle movement so rebalancing does not starve live traffic."
-  ],
-  "data-sharding-partitioning-replication__consistency-failover-split-brain-fencing": [
-    "A network partition can leave an old primary alive while another is promoted. Both may believe they can write, causing divergent histories. Failure detection alone cannot revoke the old writer’s authority.",
-    "Use a quorum-based authority and enforce epochs or fencing at the write destination. Test a delayed old primary returning after failover, not just an abruptly terminated one."
-  ],
-  "data-sharding-partitioning-replication__cross-shard-queries-joins-distributed-transactions": [
-    "Joining order and customer data on different shards may require fan-out, network transfer and merging. A transaction updating both shards additionally needs a protocol for partial failure.",
-    "Co-locate data for critical invariants where possible. For read-heavy screens, build a projection. For multi-shard writes, state whether atomic coordination or compensation fits the business promise."
-  ],
-  "data-sharding-partitioning-replication__table-partitioning-in-practice-sql-server-postgres": [
-    "In either SQL Server or PostgreSQL, partitioning an event table by date can simplify retention and prune scans when predicates constrain dates. The engines differ in index management and partition maintenance commands.",
-    "Rehearse adding the next partition, retiring an old one and querying across a boundary. Verify pruning in the actual plan and account for uniqueness requirements on partitioned keys."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__load-balancer-layer-4-vs-layer-7-algorithms-round-robin-least-conn-has": [
-    "A layer-four balancer routes transport connections. A layer-seven balancer can inspect application requests and route by host or path. Round robin fits similar backends, while least-connections or hashing serve different load and affinity needs.",
-    "Check the unit being balanced. One long-lived multiplexed connection can carry much more work than many short ones, making equal connection counts misleading."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__reverse-proxy-tls-termination-routing-caching-compression": [
-    "A reverse proxy accepts traffic on behalf of the service and may terminate TLS, select a backend, compress a response or serve a cached representation. It becomes part of the response’s security and latency path.",
-    "Define trusted forwarded headers and cache keys explicitly. Verify original scheme and client identity reach the application correctly across the trusted proxy boundary."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__forward-proxy-vs-reverse-proxy": [
-    "A forward proxy acts for clients reaching external services, for example enforcing corporate outbound policy. A reverse proxy acts for servers accepting incoming requests, for example routing a public hostname to internal backends.",
-    "Identify who configures the proxy and whose destination choice it controls. Apply the appropriate identity, logging and access rules on that side of the connection."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__api-gateway-routing-auth-rate-limiting-aggregation": [
-    "An API gateway can authenticate incoming clients, enforce quotas and route to the correct service. Aggregating several downstream reads may simplify a mobile client but coupled failures can now affect one response.",
-    "Set deadlines and partial-result rules for aggregation. Keep domain decisions in the service that owns the data and keep resource-level authorization near that data."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__request-routing-tls-termination-at-the-edge": [
-    "At the edge, the TLS handshake establishes a protected client connection and the gateway selects a backend using configured routing information. A separate connection carries the request onward.",
-    "Decide whether the internal hop also needs authenticated encryption. Plan certificate rotation, routing updates and graceful connection draining without dropping in-flight requests."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__health-checks-service-discovery": [
-    "Discovery gives a router candidate service addresses. Readiness checks decide which candidates should receive new work. Registration and health information may lag real process state.",
-    "Drain before terminating an instance and expect occasional calls to stale endpoints. Use bounded retries for safe requests and avoid probes that create cascading failures."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__rate-limiting-authentication-at-the-edge": [
-    "Authenticate the caller before applying a quota tied to a verified tenant identity. A cheap preliminary limit can also protect the authentication path from overload.",
-    "Define trust for forwarded identity and clear untrusted incoming headers. A public IP alone can group many legitimate users behind one network and is a poor substitute for tenant quotas."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__api-gateway-vs-service-mesh-north-south-vs-east-west": [
-    "A gateway handles traffic entering a service environment. A service mesh can apply transport identity, telemetry and routing policies between workloads. A single request can traverse both layers.",
-    "Assign one owner for retries and deadlines on each path. Independent retries at the gateway, mesh and client can multiply traffic during a downstream outage."
-  ],
-  "load-balancing-reverse-proxy-api-gateway__gateway-risks-spof-latency-god-object-bff-pattern": [
-    "A gateway shared by every client can become a release bottleneck and a common failure point. A backend-for-frontend can tailor aggregation to one client experience without forcing every client to accept the same shape.",
-    "Replicate and observe gateways, bound their fan-out and keep business invariants in their owning services. Introduce a BFF when client needs diverge enough to justify its lifecycle."
-  ],
-  "system-design-exercises__design-a-url-shortener": [
-    "The write path allocates a unique short code, stores its destination and handles collisions under a unique constraint. The read path looks up that code and returns an HTTP redirect, making caching valuable for popular links.",
-    "Decide whether destinations can change or expire before choosing redirect caching. Isolate analytics from redirect latency and make revocation work even for heavily cached links."
-  ],
-  "system-design-exercises__design-a-notification-service": [
-    "Persist the intent to notify, choose channels using recipient preferences and enqueue delivery attempts. Track success per recipient and channel so a failed SMS does not repeat an already delivered email.",
-    "Providers can accept a send and lose the reply. Use provider idempotency where available and distinguish accepted, delivered and unknown outcomes in support tooling."
-  ],
-  "system-design-exercises__design-a-news-feed-timeline": [
-    "Fan-out on write builds ready-to-read timelines but a celebrity post can create millions of writes. Fan-out on read shifts work to timeline retrieval. A hybrid can merge high-follower accounts during reads.",
-    "Use a stable pagination cursor and define when deleted or newly private posts disappear. Feed freshness, write amplification and authorization all affect the read design."
-  ],
-  "system-design-exercises__design-a-chat-messaging-system": [
-    "Assign a durable message ID before acknowledging a chat send. Persist conversation history and deliver over live connections when available. A reconnecting client asks for messages after its last confirmed position.",
-    "Define ordering per conversation, deduplicate client retries and separate delivery receipts from read receipts. Presence can tolerate weaker consistency than message history."
-  ],
-  "system-design-exercises__design-a-distributed-job-task-scheduler": [
-    "Store a job’s schedule, next due time and execution identity durably. Dispatchers atomically claim due executions and workers renew leases while performing the work.",
-    "If a worker pauses beyond its lease, another worker may retry. Deduplicate execution effects and specify catch-up rules for missed occurrences, daylight-saving changes and scheduler outages."
-  ],
-  "system-design-exercises__design-a-distributed-cache-redis-memcached": [
-    "Distribute cache keys across nodes and cap memory per node. On a miss, recover from an authoritative store. Node loss can therefore become an origin traffic surge even when cached data is disposable.",
-    "Plan replication or graceful degradation for hot entries, bound concurrent refills and monitor hit rate by key group. Include mass eviction and rebalancing in capacity tests."
-  ],
-  "system-design-exercises__design-a-key-value-store-dynamo-cassandra": [
-    "Partition keys, replicate each partition and define how reads select a version when replicas disagree. A write-optimized store can append to a log and memory table, then flush sorted files and compact them.",
-    "Budget for compaction, repair and tombstones. Select consistency and conflict semantics for the application before choosing quorum sizes or promising low-latency local writes."
-  ],
-  "system-design-exercises__design-a-typeahead-autocomplete": [
-    "Precompute or index candidate completions by normalized prefix and return a small ranked result set. Popular prefixes can be cached near readers while a background process updates rankings.",
-    "Evaluate relevance alongside latency. Define language normalization, privacy boundaries for personalized suggestions and how quickly removed or sensitive entries disappear from cached results."
-  ],
-  "system-design-exercises__design-a-metrics-monitoring-alerting-system": [
-    "Collect timestamped measurements into a time-series store, evaluate rules over windows and route actionable alerts to an owner. Distinguish a missing sample from an observed zero.",
-    "Bound label cardinality because one label per request can overwhelm storage. Test alert behavior when the telemetry pipeline itself fails and suppress duplicates during a single incident."
-  ],
-  "system-design-exercises__design-a-feature-flag-service": [
-    "Distribute versioned flag snapshots and evaluate locally for low request latency. A stable hash of subject and flag can keep a user in the same rollout cohort between requests.",
-    "Define safe defaults and maximum staleness for each flag. Audit changes, support rollback, and measure propagation time for a kill switch that must take effect quickly."
-  ],
-  "system-design-exercises__design-a-payment-order-flow-with-exactly-once-effects": [
-    "Give each checkout attempt a stable ID, persist order state transitions and use the same provider idempotency key on retries. Deduplicate provider callbacks and reconcile ambiguous responses against provider records.",
-    "Distinguish authorized, captured and refunded states. A timed-out capture is an unknown outcome. Look it up or retry under the same key before issuing another charge."
-  ],
-  "system-design-exercises__design-a-campaign-workflow-engine-marketing-automation": [
-    "Model a campaign as a versioned workflow with durable per-recipient progress. A waiting step records a due time so execution can resume after restart without holding a worker for days.",
-    "Recheck consent when sending, deduplicate each step and define whether in-flight recipients follow old or new workflow versions. Rate-limit delivery separately from advancing workflow state."
-  ],
-  "authentication-authorization__oauth2-vs-oidc-vs-saml": [
-    "OAuth 2.0 lets a client obtain authorization to call a resource. OpenID Connect adds a sign-in protocol and ID token. SAML commonly carries signed authentication assertions for enterprise federation.",
-    "Start by asking who needs which proof. A web app establishing a login session and an API checking delegated permissions consume different artifacts and validate different audiences."
-  ],
-  "authentication-authorization__authorization-code-pkce": [
-    "A client creates a random verifier and sends its derived challenge with the authorization request. Redeeming the resulting code requires the verifier, binding the exchange to the initiating client.",
-    "Use the S256 challenge method, validate the redirect and correlate the callback with the initiating session. For OIDC sign-in, validate the returned identity and nonce where applicable."
-  ],
-  "authentication-authorization__client-credentials": [
-    "A background invoice processor has no signed-in user. It authenticates itself to the token service and requests an access token representing the application for the billing API.",
-    "Grant application permissions narrowly, protect or eliminate long-lived secrets and cache tokens until near expiry. Audit operations under the workload identity because no user delegated them."
-  ],
-  "authentication-authorization__on-behalf-of-obo": [
-    "A frontend calls API A with a user token intended for A. To call API B on the user’s behalf, A authenticates itself and exchanges the delegated context for a token intended for B.",
-    "B validates its own audience and permissions. If B requires additional consent, handle that explicitly. Forwarding the original token across audiences undermines the service boundary."
-  ],
-  "authentication-authorization__device-authorization-device-code": [
-    "A device with limited input displays a short code and verification address. The user completes sign-in and approval on another device while the original device polls for the result.",
-    "Respect polling intervals and expiry. Show the user which device and application they are approving, and handle denial or abandonment without leaving the device polling indefinitely."
-  ],
-  "authentication-authorization__refresh-tokens-rotation": [
-    "A short-lived access token limits the duration of ordinary API access. A refresh token can obtain another one. Rotation replaces each used refresh token and can help detect reuse of an older credential.",
-    "Store refresh tokens as high-value secrets and coordinate simultaneous refreshes. Define revocation and recovery behavior when a token family appears compromised or two legitimate requests race."
-  ],
-  "authentication-authorization__implicit-ropc-know-why-they-re-deprecated": [
-    "The implicit flow returned tokens via the browser-facing authorization response. Resource owner password credentials required the application to handle the user’s password directly and fit poorly with modern interactive authentication.",
-    "For interactive clients, explain the code flow with PKCE and a hosted sign-in experience. For a daemon, choose an application identity that does not collect a human password."
-  ],
-  "authentication-authorization__jwt-tokens-cookies-validation-sig-iss-aud-exp-key-rotation": [
-    "A JWT is a token representation. A cookie is a browser transport and storage mechanism. The credential inside can represent an application session or another artifact with different validation needs.",
-    "For JWTs, validate allowed signature algorithms, trusted keys, issuer, audience and time bounds. For session cookies, protect integrity and use appropriate Secure, HttpOnly, SameSite and request-forgery protections."
-  ],
-  "authentication-authorization__rbac-abac-claims-scopes": [
-    "Roles group permissions by job function. Attribute-based policies evaluate facts about the actor, resource and context. Claims carry statements about the principal, and scopes express permitted operations within a delegated grant.",
-    "A scope allowing invoice reads still needs a check that this invoice belongs to the authorized tenant. Model and test the resource decision independently of route access."
-  ],
-  "application-security__owasp-top-10-the-categories": [
-    "Use the OWASP Top Ten as a review prompt for recurring web application risks. Walk a real request through access control, configuration, dependency trust, data handling, authentication and incident visibility to find where controls belong.",
-    "For an invoice download, verify ownership on the server and log a denied decision without logging private content. Record the edition when discussing category names because the list evolves."
-  ],
-  "application-security__owasp-essentials-sqli-xss-csrf-how-net-defends": [
-    "Bind SQL parameters to separate values from query structure. Encode untrusted text in its output context to prevent script interpretation. For cookie-authenticated state changes, validate an antiforgery token where required.",
-    "Map the control to the boundary. Parameterizing a query cannot make raw HTML output trustworthy, and HTML encoding cannot establish that a browser intentionally submitted a transfer."
-  ],
-  "application-security__cors-vs-csrf-people-confuse-these": [
-    "CORS governs when a page may read a cross-origin response. CSRF concerns a browser sending an unwanted authenticated state-changing request. A browser can sometimes send a request even when the page cannot read the result.",
-    "For a cookie-backed settings form, require appropriate antiforgery protection and choose cookie SameSite settings deliberately. Configure cross-origin access separately for legitimate client applications."
-  ],
-  "application-security__validating-a-jwt-key-rotation": [
-    "An API should accept only tokens intended for that API and issued by an authority it trusts. Validate the signature with trusted issuer keys, allowed algorithms, audience, issuer and token lifetime.",
-    "Use issuer metadata and bounded key refresh to support rotation. Cache trusted keys appropriately and handle an unknown key without accepting an unverifiable token or hammering discovery."
-  ],
-  "application-security__https-tls-what-it-actually-gives-you": [
-    "TLS provides confidentiality and integrity in transit and normally authenticates the server through certificate and hostname verification. It protects data only between the endpoints of that TLS connection.",
-    "Trace the full route when a load balancer terminates TLS. Decide how the next hop is protected and continue enforcing application authorization for the data after decryption."
-  ],
-  "application-security__password-storage-hashing-salting-work-factor": [
-    "Store a password verifier produced by a dedicated salted password-hashing algorithm. A distinct random salt prevents equal passwords from yielding the same stored verifier, and the work factor raises the cost of each guess.",
-    "Use a maintained password hasher, choose cost through measurement and retain algorithm parameters with the verifier. Upgrade older hashes after successful authentication."
-  ],
-  "application-security__secrets-management-key-vault": [
-    "Give a workload an identity authorized to read its specific secret from a vault. This removes the need to distribute a shared bootstrap password with the application package.",
-    "Rotate credentials with an overlap period where the dependency permits it. Test how running instances refresh cached values and keep secret contents out of logs and error responses."
-  ],
-  "application-security__multi-tenant-isolation-data-authz-everywhere": [
-    "Derive tenant context from a verified identity and authorization decision, then carry it through queries, cache keys, object storage and background jobs. A client-supplied tenant identifier needs an entitlement check.",
-    "Test two tenants with overlapping resource IDs across detail pages, exports and asynchronous work. Treat cross-tenant administrative access as a distinct, audited permission."
-  ],
-  "application-security__encryption-at-rest-in-transit-kms-key-vault": [
-    "Disk or database encryption protects stored media. TLS protects a connection. Envelope encryption can use a managed key to wrap data keys so access to stored ciphertext and key use can be governed separately.",
-    "Trace who can decrypt at each stage, including backups and recovery. Exercise key rotation and restoration because deleting the only usable key can make intact ciphertext unrecoverable."
-  ],
-  "application-security__mtls-for-service-to-service": [
-    "In mutual TLS, both peers present credentials and verify the identity of the other endpoint. A workload identity in a client certificate can identify which service is making a connection.",
-    "Issue short-lived certificates, automate renewal and map verified identities to explicit permissions. Successful peer authentication alone does not authorize every operation exposed by the destination."
-  ],
-  "application-security__dependency-supply-chain-scanning-sbom": [
-    "A software bill of materials records what components and versions went into an artifact. Scanning that inventory against advisories helps a team identify affected releases even when a vulnerability is announced after deployment.",
-    "Link the inventory to the deployed artifact digest, verify provenance and prioritize remediation using exposure and reachability. Rebuild and verify the replacement so a manifest edit does not masquerade as a production fix."
-  ],
+  "distributed-systems-architecture__microservices-vs-modular-monolith-when-to-split": {
+    overview: "Start with a boundary that has coherent data ownership and a reason for independent change. Modules in one deployment can enforce that boundary while preserving local calls and database transactions.",
+    question: "Which boundary would actually support independent deployment?",
+    walkthrough: "Map the write owner, transactions, schema consumers and release dependencies. A modular monolith can use explicit module APIs and separately owned tables to discover a domain boundary cheaply. Extracting it adds network timeouts, versioned contracts and distributed observability. A useful service can change or recover independently while maintaining a clear data contract. A shared database that every team edits may preserve all the old coupling.",
+    example: "Before extracting billing, stop other modules from writing billing tables. Route those changes through its module API. If that change alone is impossible, moving the code to another process will expose the same unresolved ownership conflict.",
+    implications: "Extract a service when independent scaling, release cadence or team ownership offsets network failure, observability and consistency costs. A service that must deploy in lockstep with its neighbors is a weak candidate."
+  },
+  "distributed-systems-architecture__event-driven-architecture-pros-cons": {
+    overview: "Publishing OrderPlaced lets billing and fulfillment react independently. The publisher can finish without waiting for either consumer, while each consumer may temporarily see a different stage of the order.",
+    question: "What does an event promise to its consumers?",
+    walkthrough: "An event records a fact that already occurred. Its producer owns the meaning and version of that fact; each consumer owns its reaction and checkpoint. A command instead asks a responsible party to perform work. Publishing events broadens reuse, but replay, duplicates, missing context and evolving schemas become part of the contract. Keep enough immutable identifiers and facts to process historical events correctly.",
+    example: "If OrderPlaced holds only an order ID, replaying yesterday’s event by fetching today’s order may produce a different invoice. Decide whether the event must capture agreed prices or refer to a versioned snapshot.",
+    implications: "Design event identity, schema evolution and replay deliberately. Trace a single order through consumers and define how support sees a workflow that stalled halfway."
+  },
+  "distributed-systems-architecture__cqrs-event-sourcing-what-when-worth-it": {
+    overview: "CQRS separates the models used to change state and to read it. Event sourcing stores a sequence of domain events as the authoritative history. They can be adopted independently.",
+    question: "How does replay rebuild state without repeating external effects?",
+    walkthrough: "With event sourcing, appending events to an aggregate stream typically checks the expected stream version to prevent lost updates. Fold the committed events in order to reconstruct state. CQRS read models consume changes and record their processing position. A projection rebuild should recompute data only. Sending receipts during replay would repeat side effects that belonged to live workflow execution.",
+    example: "AccountOpened → Deposited(100) → Withdrawn(30) folds to balance 70. A new monthly-report projection can replay those events without requesting another withdrawal or emailing another statement.",
+    implications: "An account statement may benefit from an event history and a fast balance projection. Budget projection rebuilds, schema evolution and the lag before a write appears in a read model."
+  },
+  "distributed-systems-architecture__saga-orchestration-vs-choreography": {
+    overview: "A travel booking requires a flight and a hotel across independent systems. A saga records progress and uses compensating actions when later steps fail. An orchestrator directs the sequence, while choreography distributes reactions among participants.",
+    question: "How does a saga recover when a compensation fails?",
+    walkthrough: "Record the workflow state and the stable identity of each step. On timeout, reconcile the step before trying again if its outcome is ambiguous. A compensation is a new domain operation that can itself fail, be delayed or require human intervention. Orchestration centralizes that decision history. Choreography requires well-defined event contracts and enough correlation to reconstruct progress across participants.",
+    example: "Flight reserved, hotel refused, cancellation request timed out. The saga should expose “flight cancellation pending,” retry with the same reference and escalate if the refund deadline approaches.",
+    implications: "Compensation has business meaning. Cancelling a reservation may incur a fee. Persist transitions and make forward and compensating actions safe to retry."
+  },
+  "distributed-systems-architecture__cap-theorem-in-practical-terms": {
+    overview: "During a network partition, two isolated replicas cannot both accept every request and guarantee that all clients observe the latest single value. A system must decide which operations wait or fail.",
+    question: "What exactly counts as availability in CAP?",
+    walkthrough: "CAP’s availability condition concerns requests received by non-failing nodes during a partition. Linearizable consistency requires operations to appear in a single order respecting real-time completion. Two disconnected sides cannot independently accept incompatible writes and both guarantee that order. A system can choose different behavior for different operations, and the theorem does not require sacrificing normal-case availability whenever the network is healthy.",
+    example: "Partition a two-region store after balance 10 is replicated. Both sides receive a request to spend 8. Independent success on both violates the balance invariant. One side must coordinate, reject, defer or rely on preallocated spend rights.",
+    implications: "Separate browsing from spending a gift-card balance. A stale description may be acceptable while two independently accepted withdrawals can violate the balance invariant."
+  },
+  "distributed-systems-architecture__two-phase-commit-why-avoided-eventual-consistency": {
+    overview: "Two-phase commit asks participants to prepare, then coordinates a common commit decision. After preparing, participants may have to retain resources while waiting for an uncertain outcome to be resolved.",
+    question: "What is the difficult point in two-phase commit?",
+    walkthrough: "During prepare, each participant durably records whether it is ready to commit and may retain locks or other resources. After all prepare, the coordinator durably decides commit or abort and communicates that outcome. A prepared participant losing access to the decision cannot safely guess. This coordination can be justified inside a controlled transactional system but becomes difficult across independent services with different availability goals.",
+    example: "Inventory prepares and payment prepares. The coordinator records commit, then crashes before notifying inventory. Inventory needs a recovery path to the durable decision; timing out and unilaterally aborting could contradict payment’s commit.",
+    implications: "When the business permits intermediate states, local commits plus durable events and compensation reduce cross-service coupling. State how long inconsistency can last and how abandoned work is repaired."
+  },
+  "distributed-systems-architecture__monolith-service-migration-strangler-fig-anti-corruption-layer": {
+    overview: "Route a bounded operation from the monolith to a new service while other traffic still follows the old path. An anti-corruption layer translates the old model into the new service’s terms.",
+    question: "How do you cut over writes without creating two sources of truth?",
+    walkthrough: "Choose one use case, define its contract and identify the one writer at each migration phase. Backfill existing data, replicate or replay incremental changes, verify completeness and equality, then switch routing under an explicit handoff. An anti-corruption layer translates legacy concepts such as overloaded status flags into the new domain vocabulary. Plan rollback for new writes received after cutover.",
+    example: "Compare old and new read responses in shadow mode first. After the new service owns writes, routing traffic back to the old service is safe only if it has received or can reconcile those newer writes.",
+    implications: "Name the authoritative writer during every migration stage. Compare outputs and retain a rollback route that accounts for writes already accepted by the new system."
+  },
+  "distributed-systems-architecture__distributed-rate-limiting-resilience": {
+    overview: "Four replicas each enforcing a hundred requests per second can collectively admit four hundred. A shared atomic limiter can enforce a fleet-wide quota, at the cost of a dependency on its latency and availability.",
+    question: "How would you design a quota under partial failure?",
+    walkthrough: "A shared token bucket needs an atomic replenish-and-consume operation, a consistent policy for time and a key that represents the quota owner. Reaching a global store on every request increases latency and couples availability. Leasing small token blocks locally trades strict precision for fewer calls. Define who absorbs risk during an outage and how budgets are renewed across instances.",
+    example: "Grant ten replicas ten local tokens each. Up to a hundred already granted tokens remain spendable if the central service stops granting new ones. Choose the grant size from allowable overshoot, not just throughput.",
+    implications: "Consider leasing small local budgets to reduce coordination. Specify how much overshoot is acceptable and what each feature does when it cannot reach the quota store."
+  },
+  "system-design-fundamentals__how-to-approach-any-system-design-question": {
+    overview: "Start a design discussion with one concrete user operation and the guarantee it needs. For example, clarify whether a newly posted message must appear immediately on the sender’s second device.",
+    question: "How do you turn vague requirements into design decisions?",
+    walkthrough: "Clarify the user-visible operation, scale, latency percentile, durability, consistency and the consequence of failure. Sketch an API and core data ownership before picking storage products. Walk one write and one read through the design. Estimate the dominant resource, identify its failure mode, then evolve only the component under pressure. Tie each added queue, replica or cache to an observable requirement.",
+    example: "For a booking system, “reserved seats must never be sold twice” drives the write boundary. A stale seat map might be acceptable, but the final reservation needs an atomic claim. That distinction can simplify most reads.",
+    implications: "Sketch the simplest write and read paths, estimate their load, then stress the costliest dependency or strongest invariant. State how you would observe and recover from its failure."
+  },
+  "system-design-fundamentals__back-of-the-envelope-estimation": {
+    overview: "One hundred million reads per day averages roughly 1,160 per second. A tenfold peak and a 10 KB response imply roughly 116 MB per second of peak response payload before overhead.",
+    question: "How do you convert business scale into storage and bandwidth?",
+    walkthrough: "Separate daily users from events per user and divide by 86,400 to estimate average requests per second. Multiply by a stated peak factor and payload size for a bandwidth estimate. For storage include retention, replication, indexes and working space. Track bytes versus bits explicitly. A rough range is more defensible than a precise number built from uncertain inputs.",
+    example: "One million daily 2 KB events retained for 30 days use about 60 GB raw in decimal units. Three copies raise that to 180 GB before indexes, logs, compression and recovery headroom.",
+    implications: "Keep units visible and distinguish peak from average. Vary the two least certain assumptions to see whether they actually change the architecture decision."
+  },
+  "system-design-fundamentals__vertical-vs-horizontal-scaling": {
+    overview: "Vertical scaling increases capacity of one node and can preserve simple local coordination. Horizontal scaling distributes work across nodes but requires routing and handling node loss or uneven load.",
+    question: "Why can throughput stop scaling after adding application instances?",
+    walkthrough: "Total throughput is constrained by the most saturated shared resource. More stateless replicas reduce per-instance work and can improve availability, but they also create more pool connections and concurrent writers. Vertical scaling may buy immediate headroom while preserving a simple architecture. Horizontal scaling needs partitionable work, coordination and a rebalancing or routing strategy. Test failure headroom as well as steady-state capacity.",
+    example: "Four instances each support 100 requests/s, but SQL sustains 250 writes/s. If every request writes once, eight instances still cannot exceed the SQL limit and may increase queuing.",
+    implications: "Identify what can be split. Stateless request handlers scale out easily until a shared database saturates. Adding more callers can make that bottleneck worse."
+  },
+  "system-design-fundamentals__multi-layer-caching-browser-cdn-app-redis-db": {
+    overview: "A browser can reuse one user’s response, a CDN can serve many nearby readers, an app can cache computed values and Redis can share results across app replicas. Each layer has its own cache key and expiry.",
+    question: "Which layer should invalidate when a public document changes?",
+    walkthrough: "List each cache’s key, owner, expiration and invalidation mechanism. An origin change may invalidate an application cache but leave a CDN object valid and a browser response fresh. Versioned asset URLs avoid chasing immutable content through layers. Mutable resources can use freshness bounds, validators or purges with measured propagation delay. Ensure personalization enters every relevant key or prevents shared caching.",
+    example: "Publish app.abc.js and reference it from revalidated HTML. The immutable asset can have a long browser and CDN lifetime, while replacing the HTML reference controls rollout. Reusing one immutable URL for different bytes breaks that model.",
+    implications: "Trace a content update through every layer. Clearing Redis does little if an edge still serves the old response. Keep private responses outside shared cache entries."
+  },
+  "system-design-fundamentals__sql-vs-nosql-how-to-choose": {
+    overview: "Begin with data access and invariants. A ledger with multi-row constraints and ad hoc reconciliation queries fits a relational model. A predictable key-based workload may suit a partitioned key-value store.",
+    question: "How do you choose a data model from access patterns?",
+    walkthrough: "Write down the primary read and write shapes, transaction boundaries, required joins, scale distribution and operational capabilities. Model one invariant that must never break and one query whose shape is likely to evolve. A relational model can combine SQL, indexes and transactions; a partitioned document or key-value store can excel when access is predictable and colocated. Product names alone do not establish consistency guarantees.",
+    example: "For orders and lines updated together, one document may work. A cross-order financial reconciliation across changing dimensions may justify a relational or analytical projection even if the transactional write model stays document-oriented.",
+    implications: "Test the hardest transaction, query and repartitioning requirement. Choosing a document database for flexible fields can become costly if every important read requires cross-document joins."
+  },
+  "system-design-fundamentals__quorum-r-w-n": {
+    overview: "With three fixed replicas, writing to two and reading from two guarantees the sets intersect. To return the newest accepted value the read protocol must interpret versions and handle competing writes correctly.",
+    question: "What information does a quorum read actually recover?",
+    walkthrough: "With N fixed replicas, a completed write to W and a read from R overlap if R + W > N. Overlap guarantees some common replica, subject to the same membership and completion assumptions. A reader still needs a version selection protocol and rules for concurrent writes. Sloppy quorums or changing membership can invalidate a simple set-intersection argument. Atomicity across keys is a separate property.",
+    example: "N=3, W=2, R=2. Write reaches A and B. A read from B and C sees at least B’s version. If two clients propose conflicting versions, intersection alone does not tell the system which business outcome wins.",
+    implications: "Quorum overlap by itself does not guarantee linearizability. Discuss concurrent writes, failed operations and whether the system uses substitute replicas during outages."
+  },
+  "system-design-fundamentals__cap-pacelc-per-feature-consistency": {
+    overview: "CAP describes the choice during partition. PACELC also asks what latency a system pays for stronger consistency while communication works. A cross-region synchronous write illustrates that everyday cost.",
+    question: "How would PACELC change an ordinary-day design decision?",
+    walkthrough: "Even without a partition, synchronously coordinating writes between distant regions adds network delay to the critical path. Serving local reads can reduce latency but may expose older data. During a partition the decision becomes whether to keep serving operations that could violate the required consistency. Specify those choices per feature and measure their user-visible consequences instead of assigning one slogan to the entire product.",
+    example: "Show approximate likes immediately from the closest region. Require a coordinated decision for consuming the final voucher. The same system can choose distinct latency and partition behavior for these two operations.",
+    implications: "Set expectations per feature. A stock reservation may justify coordination, while an approximate popularity count can accept local writes and later reconciliation."
+  },
+  "system-design-fundamentals__consistent-hashing-hot-partitions": {
+    overview: "Consistent hashing assigns ranges in a hash space so a membership change moves a subset of keys. Virtual nodes can improve distribution across machines.",
+    question: "How does consistent hashing affect placement when membership changes?",
+    walkthrough: "Map nodes and keys into a hash space and assign each key to its next owner on the ring under one convention. Adding a node transfers ownership of particular ranges, leaving others in place. Virtual nodes distribute ranges across physical machines and help balance uneven capacities. This controls how many keys move; it does not guarantee balanced request rates when key popularity is skewed.",
+    example: "If one user generates half the traffic, uniformly distributing a million user IDs can still put half the traffic on one shard. Split that user’s work only if the required operations tolerate the new boundary.",
+    implications: "Hashing spreads many keys but cannot divide a single extremely popular key. Inspect per-key traffic and add replication, caching or a different key design for skew."
+  },
+  "system-design-fundamentals__designing-for-high-availability-the-9s": {
+    overview: "A 99.9% monthly time-based objective permits about 43 minutes of unavailability in a 30-day month. Several mandatory dependencies can consume that budget quickly, especially when failures are correlated.",
+    question: "How should you calculate and spend an availability budget?",
+    walkthrough: "Define the SLI, denominator, observation window and what counts as a good event. Time-based uptime and request success can tell different stories during peak traffic. For a required serial path, independent component availabilities multiply under simplifying assumptions; shared failures make independence unreliable. Include retries, degraded responses and surviving capacity in a user-facing measurement.",
+    example: "For 10 million eligible requests at 99.9% success, the error budget is 10,000 failed requests. Losing 5,000 during a short peak consumes half the budget even if the outage barely registers on a monthly time chart.",
+    implications: "Define success from the client’s perspective and exercise failover under load. Redundancy only helps when surviving capacity, routing and recovery procedures work together."
+  },
+  "system-design-fundamentals__multi-region-dr-rpo-rto": {
+    overview: "RPO bounds acceptable data loss measured in time. RTO bounds time to restore service. A daily backup might support a long RPO even if restoring it is fast.",
+    question: "How do you measure recovery objectives rather than infer them?",
+    walkthrough: "Record the last durable business event recoverable at the target and the time clients can complete a representative transaction there. Compare the first with incident time for data loss and the second with incident start for restoration time. DNS, credentials, queues, encryption keys and downstream providers can all extend recovery beyond database promotion. Rehearse failback as well as failover.",
+    example: "A region fails at 12:00. Restored writes end at 11:56 and checkout succeeds at 12:19. Observed data loss is four minutes and observed service recovery is nineteen minutes, regardless of when the replica became reachable.",
+    implications: "Walk through a regional loss, including detection, authority transfer, data recovery and traffic movement. Measure both the latest recovered write and the time real clients can complete requests."
+  },
+  "system-design-fundamentals__backpressure-load-shedding": {
+    overview: "When arrivals exceed service capacity, unbounded queues turn excess load into memory use and increasingly stale responses. Backpressure signals producers to slow down. Load shedding rejects selected work early.",
+    question: "How should a system choose which work to shed?",
+    walkthrough: "Separate critical transactions from optional refreshes and apply admission control before consuming the scarce dependency. A bounded queue absorbs a short burst but increases time in system. Reject or degrade work whose deadline will likely expire before service starts. Tell cooperative producers how to back off, and avoid encouraging synchronized retries that refill the queue immediately.",
+    example: "At 100 jobs/s service capacity, 1,000 queued jobs imply about ten seconds before a new FIFO job starts. A two-second request deadline makes accepting that job wasteful unless priority or capacity changes.",
+    implications: "Reserve capacity for critical requests and bound waiting by deadlines. Monitor successful throughput and queue age because accepting more requests can reduce useful completions."
+  },
+  "system-design-fundamentals__push-vs-pull-websockets-sse-long-polling": {
+    overview: "Polling repeatedly asks for changes. Long polling holds the request until an update or timeout. SSE offers an HTTP server-to-client stream, while WebSockets allow both endpoints to send messages over a persistent connection.",
+    question: "What work shifts to the server when you choose push?",
+    walkthrough: "Polling uses simple short requests but repeats empty reads and trades freshness for interval. Long polling holds pending requests until an event or timeout. SSE and WebSockets require managing persistent connections, reconnects and fan-out. WebSockets provide bidirectional messaging; SSE suits server updates over HTTP. Choose heartbeat, idle timeout and replay semantics compatible with the actual load balancer and client.",
+    example: "With 100,000 clients polling every five seconds, the server handles about 20,000 polls/s even when nothing changes. Persistent connections reduce empty polls but still consume file descriptors, memory and reconnect capacity.",
+    implications: "Choose using update frequency, direction and reconnect needs. Assign event IDs and a recovery path when losing a live connection must not lose the user’s data."
+  },
+  "system-design-fundamentals__bloom-filter-what-when": {
+    overview: "A Bloom filter sets several bits for each inserted key. An unset required bit proves absence under the filter’s assumptions. All bits set means the key may exist and merits an authoritative lookup.",
+    question: "Why can a Bloom filter say “maybe” but not prove presence?",
+    walkthrough: "Each key maps to several bit positions. Insertion sets those bits, which may already have been set by other keys. A zero in any required position proves the key was not inserted into that correctly maintained filter. All ones can result from collisions. Increasing inserted items at fixed filter size raises the false-positive rate. Deleting by clearing shared bits can create false negatives.",
+    example: "If one million absent requests encounter a filter with a 1% false-positive rate, about 10,000 may still hit storage. Keep the authoritative check on positives and rebuild or update the filter consistently with real inserts.",
+    implications: "Size the filter for expected insertions and false-positive cost. A stale filter missing recent inserts can incorrectly suppress a real lookup even if the data structure itself behaves correctly."
+  },
+  "system-design-fundamentals__distributed-unique-id-generator-snowflake": {
+    overview: "A Snowflake-style ID combines time, worker identity and a counter, allowing independent workers to generate roughly time-ordered identifiers without a database round trip per ID.",
+    question: "How do you allocate and validate an ID bit budget?",
+    walkthrough: "Reserve bits for timestamp since a chosen epoch, node identity and sequence within a time unit. More sequence bits allow higher per-node bursts but reduce another dimension in a fixed-width ID. Persist or coordinate worker identities across recycling and define clock rollback behavior. A monotonic sequence within one worker and time tick does not give global causal order across skewed machines.",
+    example: "With 12 sequence bits a worker has 4,096 sequence values per millisecond. After exhausting them it must wait for the next tick or follow another safe allocation policy; wrapping in place can duplicate IDs.",
+    implications: "Allocate worker identities uniquely and define behavior for clock reversal and counter exhaustion. Ordering across machines reflects clock assumptions and cannot establish a strict causal history."
+  },
+  "system-design-fundamentals__when-to-put-a-message-queue-in-the-design": {
+    overview: "If a report takes thirty seconds, accept the request, persist a job and return a status identifier. A queue lets workers absorb a temporary burst at a controlled rate.",
+    question: "Which guarantees must be established at the enqueue boundary?",
+    walkthrough: "Define whether acknowledging the API means the request is durable, merely accepted in memory or already processed. If creating a job row and publishing a message are separate writes, use an outbox or an equivalent recoverable handoff. Choose ownership of retries, worker concurrency and dead-letter handling. Expose job status so callers can distinguish pending, running, completed and failed work.",
+    example: "A report request returns a job ID just before the host crashes. On restart the client should still find either durable pending work or a truthful terminal outcome. An in-memory queue alone cannot deliver that promise.",
+    implications: "Design deduplication, retention, cancellation and progress reporting. An indefinitely growing queue signals insufficient capacity or an overly broad acceptance policy."
+  },
+  "data-sharding-partitioning-replication__sharding-choosing-a-shard-key-avoiding-hotspots": {
+    overview: "A tenant-based shard key keeps one tenant’s data together, which makes many queries local. A single very large tenant can still dominate one shard even if tenant counts look balanced.",
+    question: "Which properties make a shard key sustainable?",
+    walkthrough: "Evaluate cardinality, distribution, growth, request locality and whether the key is known at routing time. Colocate records that transact together and avoid monotonically creating all hot writes in one range. Measure the heaviest individual key, not only average shard size. Composite keys can split a large tenant, but queries or transactions spanning its buckets then require extra coordination.",
+    example: "If a tenant owns 40% of all writes, hashing tenant_id across 100 shards still sends that tenant to one shard. Hashing (tenant_id, order_bucket) can distribute work at the cost of tenant-wide fan-out.",
+    implications: "Analyze bytes, writes and peak traffic per key. Plan an escape route for outliers, such as splitting a tenant by a secondary key where its transactions allow that split."
+  },
+  "data-sharding-partitioning-replication__partitioning-range-vs-hash-vs-directory-horizontal-vs-vertical": {
+    overview: "Range partitioning supports locality for ordered scans, hash partitioning spreads many independent keys, and a directory explicitly maps keys to locations. Horizontal partitioning divides rows, while vertical partitioning divides fields or related groups.",
+    question: "How do you compare the routing and rebalancing costs?",
+    walkthrough: "Range partitioning can answer a contiguous interval by contacting selected owners but may concentrate recent writes. Hashing usually spreads many keys more evenly while scattering range scans. Directory routing allows explicit placement and tenant moves at the price of a highly available mapping service and cache invalidation. Vertical partitioning separates groups of columns or functions with different access or protection needs.",
+    example: "Keep bulky immutable attachments apart from frequently edited message headers. That vertical split reduces update volume. Distributing message rows across customer shards is a separate horizontal decision and can be applied as well.",
+    implications: "Use the dominant access path as a test. An ordered time key can simplify retention yet route nearly all new writes to the latest range."
+  },
+  "data-sharding-partitioning-replication__replication-leader-follower-synchronous-vs-asynchronous": {
+    overview: "A leader orders writes and followers replay them. Waiting for replication before acknowledging can reduce potential data loss, while asynchronous acknowledgement typically reduces write latency.",
+    question: "Where should the acknowledgement sit on a replicated write?",
+    walkthrough: "A leader can acknowledge after its own durable write, after a follower receives log bytes, after the follower flushes them or after the follower applies them. Those are distinct promises with different latency, availability and read freshness. Synchronous replication can delay writes if required replicas are unreachable. Asynchronous replication can lose recently acknowledged writes during failover.",
+    example: "A follower has flushed entry 91 but its read model has applied only through 89. That copy may protect durability of 91 while a query served immediately from it still returns the older value.",
+    implications: "Specify what “replicated” means for the chosen system, such as received, durably flushed or applied. A replica can have received a change before a query there can observe it."
+  },
+  "data-sharding-partitioning-replication__replication-topologies-single-leader-multi-leader-leaderless": {
+    overview: "Single-leader replication centralizes write order. Multi-leader accepts writes at several leaders and needs conflict handling. Leaderless systems distribute coordination across replicas and often use quorums and repair.",
+    question: "How do competing writes get resolved in different topologies?",
+    walkthrough: "A single leader can order conflicting writes at one point, though failover still needs fencing. Multi-leader deployments can accept geographically local writes, then need a domain rule to reconcile conflicts. Leaderless systems can use quorums, version metadata, read repair and background repair. Last-write-wins depends on a chosen time or order and can silently discard a valid concurrent business operation.",
+    example: "Two regions update different fields on one profile while disconnected. Whole-document last-write-wins can lose one field. Field-level merges may work for preferences but require different reasoning for a bank balance.",
+    implications: "Walk through two clients updating the same field during disconnection. Pick a conflict outcome the domain can tolerate before choosing the topology."
+  },
+  "data-sharding-partitioning-replication__read-replicas-replication-lag-read-your-writes": {
+    overview: "A user updates a profile and immediately reloads it from a lagging replica. The old name looks like a failed save even though the primary committed successfully.",
+    question: "Which session guarantees matter beyond one read-after-write?",
+    walkthrough: "Read-your-writes lets a caller see its own committed change. Monotonic reads prevent later reads moving backward after the caller saw a newer version. A client switching among lagging replicas can violate either guarantee. Attach a version or log-position floor to the session and route to a replica meeting it, wait within a budget or fall back to the leader.",
+    example: "Read version 12 from replica A, then route to B at version 10. Even without a recent client write, showing version 10 reverses observed history. Carrying “at least 12” can avoid that regression.",
+    implications: "Route that user’s read to the primary or wait for a replica to reach the write position. A fixed delay is only a heuristic and breaks under unusually large lag."
+  },
+  "data-sharding-partitioning-replication__rebalancing-resharding-with-consistent-hashing": {
+    overview: "Adding a node to a hash ring changes ownership of certain ranges. Existing data in those ranges must be moved while reads and writes continue. The routing algorithm alone does not transfer any bytes.",
+    question: "How do you migrate a live range without dropping updates?",
+    walkthrough: "Create the target range and copy a consistent snapshot. Capture updates occurring during the copy, replay them through a known position and verify the destination. Publish a new routing epoch and reject stale writes or forward them through a controlled transition. Retain the old copy until clients and recovery procedures can safely stop using it. Data movement competes with live traffic for I/O.",
+    example: "An order changes after its row was copied but before routing switches. A successful row-count comparison will miss the stale value. Verify versions or checksums and the change-stream checkpoint before transferring write authority.",
+    implications: "Version routing metadata, copy data, catch up concurrent writes and cut over with verification. Throttle movement so rebalancing does not starve live traffic."
+  },
+  "data-sharding-partitioning-replication__consistency-failover-split-brain-fencing": {
+    overview: "A network partition can leave an old primary alive while another is promoted. Both may believe they can write, causing divergent histories. Failure detection alone cannot revoke the old writer’s authority.",
+    question: "What is the difference between suspecting failure and granting authority?",
+    walkthrough: "Health checks cannot distinguish every crashed leader from a live but disconnected leader. Promotion must be tied to an authority such as a consensus quorum or a properly specified lease. Only the current epoch should be allowed to commit externally visible changes. Fencing at storage or another authoritative destination prevents delayed old writes from undoing newer ones. Routing changes alone do not revoke old credentials or packets.",
+    example: "After promoting B, deliberately restore connectivity to old leader A with buffered work. Verify storage rejects A’s old epoch and that clients cannot accidentally recognize both leaders as authoritative.",
+    implications: "Use a quorum-based authority and enforce epochs or fencing at the write destination. Test a delayed old primary returning after failover, not just an abruptly terminated one."
+  },
+  "data-sharding-partitioning-replication__cross-shard-queries-joins-distributed-transactions": {
+    overview: "Joining order and customer data on different shards may require fan-out, network transfer and merging. A transaction updating both shards additionally needs a protocol for partial failure.",
+    question: "How does fan-out change tail latency and correctness?",
+    walkthrough: "A global query contacting many shards often waits for the slowest required response, then merges results under a defined ordering. Cross-shard joins may require shipping data or maintaining denormalized projections. A cross-shard write can commit on only some participants unless there is a coordination protocol or compensating workflow. Keep related invariants together when a realistic partition key allows it.",
+    example: "To return the latest ten events across twenty shards, fetch up to ten locally ordered candidates per shard, then merge globally with deterministic tie-breaking. Define whether one unavailable shard yields a partial result or an error.",
+    implications: "Co-locate data for critical invariants where possible. For read-heavy screens, build a projection. For multi-shard writes, state whether atomic coordination or compensation fits the business promise."
+  },
+  "data-sharding-partitioning-replication__table-partitioning-in-practice-sql-server-postgres": {
+    overview: "In either SQL Server or PostgreSQL, partitioning an event table by date can simplify retention and prune scans when predicates constrain dates. The engines differ in index management and partition maintenance commands.",
+    question: "How do you choose a time-partition size?",
+    walkthrough: "Start with retention operations, rows per interval, typical query range and maintenance windows. Monthly partitions may simplify lifecycle management for years of data while daily partitions may be better for short retention and high ingestion. Too many partitions can increase planning and maintenance overhead. Compare how each engine handles boundaries, aligned indexes, unique constraints and online maintenance.",
+    example: "Before dropping the oldest partition, test an event arriving late and an active query spanning the boundary. Confirm retention policy, archive availability and application expectations for both engines in use.",
+    implications: "Rehearse adding the next partition, retiring an old one and querying across a boundary. Verify pruning in the actual plan and account for uniqueness requirements on partitioned keys."
+  },
+  "load-balancing-reverse-proxy-api-gateway__load-balancer-layer-4-vs-layer-7-algorithms-round-robin-least-conn-has": {
+    overview: "A layer-four balancer routes transport connections. A layer-seven balancer can inspect application requests and route by host or path. Round robin fits similar backends, while least-connections or hashing serve different load and affinity needs.",
+    question: "How should the balancing algorithm match request cost?",
+    walkthrough: "Round robin approximates fairness when requests cost similar amounts. Least-connections can help with long-lived connections but one multiplexed connection may carry thousands of requests. Hashing can improve cache locality or session affinity while concentrating hot clients. Layer seven can use application metadata at the cost of understanding the protocol and often terminating TLS. Evaluate balance by useful work as well as connection counts.",
+    example: "One gRPC client sends 80% of requests through one connection. A TCP balancer cannot split that connection across servers. Per-RPC balancing or multiple appropriately managed channels may distribute the work more effectively.",
+    implications: "Check the unit being balanced. One long-lived multiplexed connection can carry much more work than many short ones, making equal connection counts misleading."
+  },
+  "load-balancing-reverse-proxy-api-gateway__reverse-proxy-tls-termination-routing-caching-compression": {
+    overview: "A reverse proxy accepts traffic on behalf of the service and may terminate TLS, select a backend, compress a response or serve a cached representation. It becomes part of the response’s security and latency path.",
+    question: "What trust changes when TLS ends at the proxy?",
+    walkthrough: "The proxy decrypts traffic and sees the request in cleartext at that boundary. It may start a separate TLS connection to the backend, rewrite the Host header, add forwarding metadata or serve cached content. Configure the backend to trust forwarding information only from authorized proxies. Set request size, buffering, timeouts and compression policies that fit streaming as well as ordinary responses.",
+    example: "A proxy buffers every response for compression and makes an SSE endpoint appear frozen. Test first-byte and incremental-event latency through the real proxy, not just directly against the service.",
+    implications: "Define trusted forwarded headers and cache keys explicitly. Verify original scheme and client identity reach the application correctly across the trusted proxy boundary."
+  },
+  "load-balancing-reverse-proxy-api-gateway__forward-proxy-vs-reverse-proxy": {
+    overview: "A forward proxy acts for clients reaching external services, for example enforcing corporate outbound policy. A reverse proxy acts for servers accepting incoming requests, for example routing a public hostname to internal backends.",
+    question: "Who is represented by the proxy on each side?",
+    walkthrough: "A forward proxy receives a client’s request for an external destination and applies client-side policy, such as outbound access controls. A reverse proxy exposes the server’s public endpoint and chooses the internal upstream. Both can use TLS and caching, so those features alone do not identify the role. Decide whose identity is authenticated and which destination choices are trusted.",
+    example: "A corporate developer reaches a public package registry through an outbound proxy. The registry itself sits behind its own reverse proxy. One request passes through both roles for different organizations.",
+    implications: "Identify who configures the proxy and whose destination choice it controls. Apply the appropriate identity, logging and access rules on that side of the connection."
+  },
+  "load-balancing-reverse-proxy-api-gateway__api-gateway-routing-auth-rate-limiting-aggregation": {
+    overview: "An API gateway can authenticate incoming clients, enforce quotas and route to the correct service. Aggregating several downstream reads may simplify a mobile client but coupled failures can now affect one response.",
+    question: "How do you avoid turning an API gateway into the domain layer?",
+    walkthrough: "Centralize shared transport policy such as routing, authentication, request limits and correlation. Let the owning service make state-dependent authorization and business decisions. Aggregation endpoints should define per-dependency deadlines and partial results. Otherwise a slow optional lookup can make a critical route unavailable. Expose downstream contribution to gateway latency so the gateway does not conceal dependency failures.",
+    example: "A mobile order summary combines order, payment and recommended products. If recommendations time out, the gateway can omit them under contract. Payment visibility still requires the order service’s tenant and ownership decision.",
+    implications: "Set deadlines and partial-result rules for aggregation. Keep domain decisions in the service that owns the data and keep resource-level authorization near that data."
+  },
+  "load-balancing-reverse-proxy-api-gateway__request-routing-tls-termination-at-the-edge": {
+    overview: "At the edge, the TLS handshake establishes a protected client connection and the gateway selects a backend using configured routing information. A separate connection carries the request onward.",
+    question: "How does a request travel from hostname to application?",
+    walkthrough: "DNS selects an edge address. The client establishes TLS with a certificate valid for the requested hostname. The edge uses trusted host and path rules to choose an upstream, applies configured policy and forwards over an internal connection. Each hop has its own timeouts and identity expectations. Rotation and draining must account for long-lived connections that outlast a routing update.",
+    example: "Test deployment with requests already in flight while an upstream becomes unready. Observe certificate validation, route selection and whether old connections drain before that upstream is terminated.",
+    implications: "Decide whether the internal hop also needs authenticated encryption. Plan certificate rotation, routing updates and graceful connection draining without dropping in-flight requests."
+  },
+  "load-balancing-reverse-proxy-api-gateway__health-checks-service-discovery": {
+    overview: "Discovery gives a router candidate service addresses. Readiness checks decide which candidates should receive new work. Registration and health information may lag real process state.",
+    question: "Why do healthy endpoints still receive calls during rollout?",
+    walkthrough: "Discovery, routing caches and readiness checks update asynchronously. An endpoint can receive requests already assigned before it became unready. Graceful removal first stops new assignments, allows propagation, drains in-flight operations and then shuts down. Liveness probes should target problems a restart can repair. Retry safe calls only within a bounded deadline to cover transient stale routing.",
+    example: "At t0 mark an instance unready. At t1 an old connection still sends a request. Delay termination until the configured drain window, and measure whether outstanding requests completed or received a retryable response.",
+    implications: "Drain before terminating an instance and expect occasional calls to stale endpoints. Use bounded retries for safe requests and avoid probes that create cascading failures."
+  },
+  "load-balancing-reverse-proxy-api-gateway__rate-limiting-authentication-at-the-edge": {
+    overview: "Authenticate the caller before applying a quota tied to a verified tenant identity. A cheap preliminary limit can also protect the authentication path from overload.",
+    question: "How should the edge combine caller identity and quotas?",
+    walkthrough: "Use a cheap coarse limit to protect the ingress and identity service, then apply finer quotas to verified client or tenant identities. Strip or overwrite incoming identity headers before forwarding trusted claims. Establish an authenticated channel to downstream services that rely on those headers. Limit expensive operations differently from cheap reads because equal request counts can impose very different costs.",
+    example: "One report consumes seconds of CPU while one status check takes milliseconds. A shared quota of 100 requests/s for both allows report traffic to exhaust capacity while looking compliant by count.",
+    implications: "Define trust for forwarded identity and clear untrusted incoming headers. A public IP alone can group many legitimate users behind one network and is a poor substitute for tenant quotas."
+  },
+  "load-balancing-reverse-proxy-api-gateway__api-gateway-vs-service-mesh-north-south-vs-east-west": {
+    overview: "A gateway handles traffic entering a service environment. A service mesh can apply transport identity, telemetry and routing policies between workloads. A single request can traverse both layers.",
+    question: "What is the cost of overlapping gateway and mesh policies?",
+    walkthrough: "The gateway handles external contracts, client credentials and public routes. The mesh can handle service discovery, workload identity and transport policy within the service network. Both can impose retries, deadlines and telemetry. Uncoordinated retries multiply downstream attempts, while inconsistent timeouts create abandoned work. Trace one request across all hops and assign ownership of each policy.",
+    example: "If a gateway tries three times and a mesh retries each attempt three times, one caller can trigger nine service calls. A single end-to-end budget and an agreed retry owner make that behavior predictable.",
+    implications: "Assign one owner for retries and deadlines on each path. Independent retries at the gateway, mesh and client can multiply traffic during a downstream outage."
+  },
+  "load-balancing-reverse-proxy-api-gateway__gateway-risks-spof-latency-god-object-bff-pattern": {
+    overview: "A gateway shared by every client can become a release bottleneck and a common failure point. A backend-for-frontend can tailor aggregation to one client experience without forcing every client to accept the same shape.",
+    question: "When is a backend-for-frontend worth operating?",
+    walkthrough: "Introduce a BFF when client experiences need materially different aggregation, payloads or release cadences. A mobile client may need one small response on an unreliable network while a desktop app can request several richer resources. A BFF becomes another dependency to scale, secure and monitor. Keep it focused on experience-specific composition so it does not become a second source of business rules.",
+    example: "If shipping eligibility changes, both mobile and web should see the same answer from the order domain. Their BFFs can present it differently, but separate eligibility calculations would drift.",
+    implications: "Replicate and observe gateways, bound their fan-out and keep business invariants in their owning services. Introduce a BFF when client needs diverge enough to justify its lifecycle."
+  },
+  "system-design-exercises__design-a-url-shortener": {
+    overview: "The write path allocates a unique short code, stores its destination and handles collisions under a unique constraint. The read path looks up that code and returns an HTTP redirect, making caching valuable for popular links.",
+    question: "How would you size the keyspace and handle collisions?",
+    walkthrough: "A seven-character base62 code provides 62⁷ possible values, about 3.5 trillion. Random generation still produces collisions well before exhaustion, so enforce unique insertion and retry. Sequential allocation with encoding has different predictability and allocation trade-offs. Reads dominate many shorteners, making hot-key caching useful, but redirect status and cache lifetime must match whether destinations can change.",
+    example: "A custom alias must be claimed with one atomic uniqueness check. If a link can be revoked, a long-lived browser-cached permanent redirect may bypass your service completely after revocation.",
+    implications: "Decide whether destinations can change or expire before choosing redirect caching. Isolate analytics from redirect latency and make revocation work even for heavily cached links."
+  },
+  "system-design-exercises__design-a-notification-service": {
+    overview: "Persist the intent to notify, choose channels using recipient preferences and enqueue delivery attempts. Track success per recipient and channel so a failed SMS does not repeat an already delivered email.",
+    question: "Where do preferences, retries and provider callbacks belong?",
+    walkthrough: "Keep a durable notification intent with a business ID. Resolve recipients, channel preferences and templates into per-channel delivery records. A worker claims a delivery, applies rate limits, submits to its provider and persists the provider reference. Deduplicate callbacks, which can arrive late or out of order. Check preferences at the correct time for scheduled or sensitive notifications.",
+    example: "A provider accepts SMS S at 10:00, a retry response arrives at 10:01 and a delivery receipt arrives at 10:02. Preserve distinct accepted and delivered timestamps without generating a second billable SMS.",
+    implications: "Providers can accept a send and lose the reply. Use provider idempotency where available and distinguish accepted, delivered and unknown outcomes in support tooling."
+  },
+  "system-design-exercises__design-a-news-feed-timeline": {
+    overview: "Fan-out on write builds ready-to-read timelines but a celebrity post can create millions of writes. Fan-out on read shifts work to timeline retrieval. A hybrid can merge high-follower accounts during reads.",
+    question: "How do you keep a timeline correct during edits and deletions?",
+    walkthrough: "Separate the authoritative post and access policy from derived timeline entries. Fan-out can copy identifiers into follower timelines, but an old timeline entry must not authorize viewing a now-private post. Filter or recheck visibility at read time when necessary, and propagate deletions to control storage and freshness. Use stable ordering keys so new posts do not cause duplicates across pages.",
+    example: "A celebrity has ten million followers. Enqueuing ten million timeline writes per post can swamp ordinary users’ fan-out. Merge recent celebrity posts at read time and measure the added read latency.",
+    implications: "Use a stable pagination cursor and define when deleted or newly private posts disappear. Feed freshness, write amplification and authorization all affect the read design."
+  },
+  "system-design-exercises__design-a-chat-messaging-system": {
+    overview: "Assign a durable message ID before acknowledging a chat send. Persist conversation history and deliver over live connections when available. A reconnecting client asks for messages after its last confirmed position.",
+    question: "What should a chat acknowledgement mean?",
+    walkthrough: "Persist the message under a stable client or operation ID and assign the conversation’s ordering position before acknowledging durable acceptance. Live delivery to a device and read receipt by a user are later states. On reconnect, fetch after the last confirmed position, deduplicate received IDs and detect gaps. Presence and typing indicators can use shorter-lived, weaker delivery guarantees.",
+    example: "A sender loses connectivity after the server commits message 88. It resends the same client message ID. Return position 88 and avoid appending message 89 with identical content.",
+    implications: "Define ordering per conversation, deduplicate client retries and separate delivery receipts from read receipts. Presence can tolerate weaker consistency than message history."
+  },
+  "system-design-exercises__design-a-distributed-job-task-scheduler": {
+    overview: "Store a job’s schedule, next due time and execution identity durably. Dispatchers atomically claim due executions and workers renew leases while performing the work.",
+    question: "How do you model a recurring execution independently of its worker?",
+    walkthrough: "Store the schedule, its time-zone rules, next due time and a durable occurrence ID. Claim an occurrence conditionally, record progress and make worker effects safe to repeat after lease loss. Decide whether a missed schedule produces all missed runs, one catch-up run or none. Store enough timing information to explain behavior around daylight-saving changes and late execution.",
+    example: "The 09:00 daily invoice run starts at 09:05 after downtime. Its occurrence identity still represents the scheduled 09:00 run. Restarting at 09:06 should resume that occurrence, not create another invoice batch.",
+    implications: "If a worker pauses beyond its lease, another worker may retry. Deduplicate execution effects and specify catch-up rules for missed occurrences, daylight-saving changes and scheduler outages."
+  },
+  "system-design-exercises__design-a-distributed-cache-redis-memcached": {
+    overview: "Distribute cache keys across nodes and cap memory per node. On a miss, recover from an authoritative store. Node loss can therefore become an origin traffic surge even when cached data is disposable.",
+    question: "How should a cache behave when capacity suddenly disappears?",
+    walkthrough: "Define shard placement, replication and ownership changes, then trace misses back to the authority. Losing one cache node can remove an entire hot range at once. Replication reduces cold reads but increases memory and update complexity. Coalesced refills, stale serving and admission limits protect the origin during recovery. Monitor evictions and misses by shard so one failing range is visible.",
+    example: "If a 95% hit rate falls to 70% at constant traffic, origin demand rises from 5% to 30%, a sixfold increase. The cache can remain mostly available while its database overloads.",
+    implications: "Plan replication or graceful degradation for hot entries, bound concurrent refills and monitor hit rate by key group. Include mass eviction and rebalancing in capacity tests."
+  },
+  "system-design-exercises__design-a-key-value-store-dynamo-cassandra": {
+    overview: "Partition keys, replicate each partition and define how reads select a version when replicas disagree. A write-optimized store can append to a log and memory table, then flush sorted files and compact them.",
+    question: "How does a write reach an LSM-based key-value store?",
+    walkthrough: "Route the key to its replica set. Each participating node typically appends to a commit log and updates a memory structure, later flushing sorted immutable files. Reads may consult several files; filters and indexes reduce unnecessary work. Compaction merges files and removes obsolete versions when safe. Replication acknowledgement, conflict resolution and repair determine what survives failures independently of the local disk layout.",
+    example: "A delete becomes a tombstone. If it is discarded before an offline replica is repaired, the stale replica can reintroduce an old value. Coordinate retention, repair windows and maximum expected outage.",
+    implications: "Budget for compaction, repair and tombstones. Select consistency and conflict semantics for the application before choosing quorum sizes or promising low-latency local writes."
+  },
+  "system-design-exercises__design-a-typeahead-autocomplete": {
+    overview: "Precompute or index candidate completions by normalized prefix and return a small ranked result set. Popular prefixes can be cached near readers while a background process updates rankings.",
+    question: "How would you serve top suggestions within a tight latency budget?",
+    walkthrough: "Normalize the prefix according to language and product rules. Retrieve a bounded candidate set from a trie, sorted index or prefix-to-top-K table, then rerank using popularity, recency and permitted personalization. Precomputing short popular prefixes reduces read work but makes updates and deletions more complex. Treat private query history as user-scoped data with explicit retention.",
+    example: "For prefix “ca”, precompute a public candidate set and rerank for the current context. Check that a term seen only in one user’s private history never appears in another user’s shared cached response.",
+    implications: "Evaluate relevance alongside latency. Define language normalization, privacy boundaries for personalized suggestions and how quickly removed or sensitive entries disappear from cached results."
+  },
+  "system-design-exercises__design-a-metrics-monitoring-alerting-system": {
+    overview: "Collect timestamped measurements into a time-series store, evaluate rules over windows and route actionable alerts to an owner. Distinguish a missing sample from an observed zero.",
+    question: "How do collection, storage and alert evaluation fit together?",
+    walkthrough: "Collect timestamped values with bounded dimensions, buffer or sample during bursts, and store them in time-series partitions with retention and rollups. Counters, gauges and histograms need different aggregation semantics. Alert rules evaluate windows and route notifications to accountable owners. Decide how delayed data and missing telemetry affect alert state, and monitor the monitoring path itself.",
+    example: "Adding user_id as a label to 100 metrics for a million users can create up to 100 million distinct series before other labels. Put high-cardinality per-user detail in an appropriate log or trace path instead.",
+    implications: "Bound label cardinality because one label per request can overwhelm storage. Test alert behavior when the telemetry pipeline itself fails and suppress duplicates during a single incident."
+  },
+  "system-design-exercises__design-a-feature-flag-service": {
+    overview: "Distribute versioned flag snapshots and evaluate locally for low request latency. A stable hash of subject and flag can keep a user in the same rollout cohort between requests.",
+    question: "How does local flag evaluation stay reproducible during rollout?",
+    walkthrough: "Distribute versioned configuration snapshots and evaluate conditions against a defined context. Hash a stable subject identifier with the flag key and compare its bucket to the rollout threshold. Keep hashing and normalization consistent across languages. Atomic snapshot replacement avoids mixing two versions of related targeting rules. Missing context, stale configuration and a disconnected control plane each need explicit defaults.",
+    example: "Raise a rollout from 5% to 10%. With a stable hash and unchanged targeting, users in the first 5% stay included. Re-randomizing on each request would make a user’s experience alternate unpredictably.",
+    implications: "Define safe defaults and maximum staleness for each flag. Audit changes, support rollback, and measure propagation time for a kill switch that must take effect quickly."
+  },
+  "system-design-exercises__design-a-payment-order-flow-with-exactly-once-effects": {
+    overview: "Give each checkout attempt a stable ID, persist order state transitions and use the same provider idempotency key on retries. Deduplicate provider callbacks and reconcile ambiguous responses against provider records.",
+    question: "How do you reconcile provider and order states after an ambiguous payment?",
+    walkthrough: "Model separate transitions for creation, authorization, capture, cancellation and refund as appropriate. Persist the intended transition and use one stable idempotency reference per provider operation. Callbacks can duplicate or arrive out of order, so deduplicate and validate legal transitions. Periodically compare unresolved local operations with provider records. The guarantee concerns the business effect within defined provider and retention boundaries.",
+    example: "Capture request C times out. Keep the order in capture-pending, query the provider by C and accept a matching verified callback. Starting a new capture under another key before reconciliation creates a second-charge risk.",
+    implications: "Distinguish authorized, captured and refunded states. A timed-out capture is an unknown outcome. Look it up or retry under the same key before issuing another charge."
+  },
+  "system-design-exercises__design-a-campaign-workflow-engine-marketing-automation": {
+    overview: "Model a campaign as a versioned workflow with durable per-recipient progress. A waiting step records a due time so execution can resume after restart without holding a worker for days.",
+    question: "How does a waiting campaign step survive deployment and edits?",
+    walkthrough: "Compile the campaign into versioned steps and condition transitions. Persist each participant’s current step, workflow version, due time and completion identity. Resume a due participant through an atomic claim, recheck eligibility and record the resulting transition. External sends need their own durable intent and deduplication. Preserve enough history to explain why a person received or skipped a message.",
+    example: "A user enters version 4 and waits two days. Version 5 removes the next email and the user opts out overnight. Decide the migration policy for version 4, but honor current consent at send time under either version.",
+    implications: "Recheck consent when sending, deduplicate each step and define whether in-flight recipients follow old or new workflow versions. Rate-limit delivery separately from advancing workflow state."
+  },
+  "authentication-authorization__oauth2-vs-oidc-vs-saml": {
+    overview: "OAuth 2.0 lets a client obtain authorization to call a resource. OpenID Connect adds a sign-in protocol and ID token. SAML commonly carries signed authentication assertions for enterprise federation.",
+    question: "Which party consumes each artifact during sign-in?",
+    walkthrough: "In OIDC sign-in, the client relies on the identity provider’s ID token after validating its issuer, intended client, signature and applicable nonce and lifetime. An access token is for a resource server, which validates it according to its format and authorization contract. SAML federation commonly delivers a signed assertion to a service provider that establishes its own session. Each artifact has a consumer and intended use.",
+    example: "A web app can create a local session after valid OIDC sign-in. When calling the billing API it sends an access token for billing. The API must decide whether that identity may read this particular invoice.",
+    implications: "Start by asking who needs which proof. A web app establishing a login session and an API checking delegated permissions consume different artifacts and validate different audiences."
+  },
+  "authentication-authorization__authorization-code-pkce": {
+    overview: "A client creates a random verifier and sends its derived challenge with the authorization request. Redeeming the resulting code requires the verifier, binding the exchange to the initiating client.",
+    question: "What does PKCE bind to the authorization code?",
+    walkthrough: "The initiating client generates a high-entropy verifier and sends a derived challenge in the authorization request. With S256 the challenge is a base64url-encoded SHA-256 digest of the verifier. The authorization server associates it with the issued code. At the token endpoint it recomputes the challenge from the presented verifier before accepting the exchange. Keep the verifier with the initiating session and discard it after use.",
+    example: "Browser returns with a short-lived code. The client sends the code, verifier and required client authentication or identification to the token endpoint. An unrelated session should not be able to complete that sign-in using its own verifier.",
+    implications: "Use the S256 challenge method, validate the redirect and correlate the callback with the initiating session. For OIDC sign-in, validate the returned identity and nonce where applicable."
+  },
+  "authentication-authorization__client-credentials": {
+    overview: "A background invoice processor has no signed-in user. It authenticates itself to the token service and requests an access token representing the application for the billing API.",
+    question: "Who is authorized when a daemon receives a token?",
+    walkthrough: "The confidential client authenticates to the authorization server using an approved credential or workload identity. It obtains an access token intended for the target API under application permissions. The API must authorize the application identity, including tenant and operation restrictions. There is no end-user consent context attached to the act of processing a job. Cache tokens with bounded lifetime and avoid logging their contents.",
+    example: "A nightly importer may be allowed to upload invoices but have no permission to refund them. Test the token against both operations, and verify audit records identify the workload and the specific import job.",
+    implications: "Grant application permissions narrowly, protect or eliminate long-lived secrets and cache tokens until near expiry. Audit operations under the workload identity because no user delegated them."
+  },
+  "authentication-authorization__on-behalf-of-obo": {
+    overview: "A frontend calls API A with a user token intended for A. To call API B on the user’s behalf, A authenticates itself and exchanges the delegated context for a token intended for B.",
+    question: "What does the middle-tier service exchange, and why?",
+    walkthrough: "In a delegated on-behalf-of flow, API A receives and validates an access token intended for A. It authenticates itself to the token service and presents the incoming delegated context to request a token for API B. The resulting token must satisfy B’s audience and permission checks. This preserves the distinction between the application calling and the user on whose behalf it acts.",
+    example: "If A can read a user’s profile but B requires calendar permission, token exchange should not silently elevate authority. Handle consent or authorization failure and avoid falling back to broad application privileges.",
+    implications: "B validates its own audience and permissions. If B requires additional consent, handle that explicitly. Forwarding the original token across audiences undermines the service boundary."
+  },
+  "authentication-authorization__device-authorization-device-code": {
+    overview: "A device with limited input displays a short code and verification address. The user completes sign-in and approval on another device while the original device polls for the result.",
+    question: "How do the device and browser sessions meet?",
+    walkthrough: "The device obtains a device code plus a short user-facing code and verification location. The browser user authenticates with the identity provider and approves the device session identified by that flow. The device polls the token endpoint using the device code until approval, denial or expiry. Keep the device code confidential to the device and respect any instruction to slow polling.",
+    example: "If approval finishes after the code expires, start a fresh device flow and present its new code. Never assume an old approval authorizes an unrelated newly generated device session.",
+    implications: "Respect polling intervals and expiry. Show the user which device and application they are approving, and handle denial or abandonment without leaving the device polling indefinitely."
+  },
+  "authentication-authorization__refresh-tokens-rotation": {
+    overview: "A short-lived access token limits the duration of ordinary API access. A refresh token can obtain another one. Rotation replaces each used refresh token and can help detect reuse of an older credential.",
+    question: "What should happen when the same refresh token is used twice?",
+    walkthrough: "Under rotation, the issuer exchanges a valid refresh token for a new token and retires the previous one. Reuse of a retired credential can indicate exposure, but concurrent legitimate refreshes can produce a similar symptom. Serialize refresh per session where practical, store new tokens atomically and follow the issuer’s detection and revocation behavior. Public clients need an appropriate replay defense such as rotation or sender constraint.",
+    example: "Two browser tabs discover an expired access token together. If both refresh independently, one can invalidate the other’s session. Share the refreshed state safely or coordinate refresh so only one exchange is in flight.",
+    implications: "Store refresh tokens as high-value secrets and coordinate simultaneous refreshes. Define revocation and recovery behavior when a token family appears compromised or two legitimate requests race."
+  },
+  "authentication-authorization__implicit-ropc-know-why-they-re-deprecated": {
+    source: { title: "OAuth 2.0 Security Best Current Practice (RFC 9700)", url: "https://www.rfc-editor.org/rfc/rfc9700.html" },
+    overview: "The implicit flow returned tokens via the browser-facing authorization response. Resource owner password credentials required the application to handle the user’s password directly and fit poorly with modern interactive authentication.",
+    question: "Why do modern deployments use different grants?",
+    walkthrough: "Implicit issuance exposes access tokens in the authorization response path and lacks the protections of a code redeemed at a token endpoint with PKCE. The password grant gives the application direct custody of user credentials and breaks the separation needed for modern authentication methods. RFC 9700 prohibits the password grant and advises against implicit access-token issuance except under tightly qualified protections. Migrate by identifying the actual actor and client capabilities.",
+    example: "An interactive browser app should redirect to the identity provider and redeem a code appropriately. An unattended integration should use workload credentials. Copying a human password into a service account field inherits the wrong trust model.",
+    implications: "For interactive clients, explain the code flow with PKCE and a hosted sign-in experience. For a daemon, choose an application identity that does not collect a human password."
+  },
+  "authentication-authorization__jwt-tokens-cookies-validation-sig-iss-aud-exp-key-rotation": {
+    overview: "A JWT is a token representation. A cookie is a browser transport and storage mechanism. The credential inside can represent an application session or another artifact with different validation needs.",
+    question: "How do token validation and credential transport fit together?",
+    walkthrough: "For a signed token, trust a configured issuer and acceptable algorithm, obtain its public keys from trusted metadata, verify the signature and validate claims relevant to the recipient. JWT contents are generally readable when merely signed. A cookie’s security properties come from its contents, transport settings and browser behavior. An opaque session ID may refer to server-side session state instead of carrying claims.",
+    example: "A validly signed access token for API A reaches API B. B rejects it on audience even though the signature verifies. A cookie-based browser session additionally needs protection for state-changing requests automatically carrying that cookie.",
+    implications: "For JWTs, validate allowed signature algorithms, trusted keys, issuer, audience and time bounds. For session cookies, protect integrity and use appropriate Secure, HttpOnly, SameSite and request-forgery protections."
+  },
+  "authentication-authorization__rbac-abac-claims-scopes": {
+    overview: "Roles group permissions by job function. Attribute-based policies evaluate facts about the actor, resource and context. Claims carry statements about the principal, and scopes express permitted operations within a delegated grant.",
+    question: "How do roles, scopes and attributes combine in one decision?",
+    walkthrough: "A token can carry attributes or claims about the actor, such as tenant and application identity. A scope may permit attempting invoice approval. A role may establish the user is a finance approver. A resource policy can additionally check ownership, amount threshold and separation of duties. Evaluate those controls against the actual resource and trusted current state. Long-lived token claims can outlast a permission change.",
+    example: "A finance approver has invoice.approve in tenant A. Decline an invoice from tenant B and an invoice the same user submitted if the workflow requires an independent approver. A matching role alone is insufficient.",
+    implications: "A scope allowing invoice reads still needs a check that this invoice belongs to the authorized tenant. Model and test the resource decision independently of route access."
+  },
+  "application-security__owasp-top-10-the-categories": {
+    source: { title: "OWASP Top Ten categories, 2025 edition", url: "https://top10.owasp.org/2025/" },
+    overview: "Use the OWASP Top Ten as a review prompt for recurring web application risks. Walk a real request through access control, configuration, dependency trust, data handling, authentication and incident visibility to find where controls belong.",
+    question: "How do you use the 2025 categories in a design review?",
+    walkthrough: "Walk through access decisions, deployment configuration, software supply-chain controls, cryptographic handling and injection prevention. Then examine design assumptions, authentication, software and data integrity, logging and alerting, and behavior under exceptional conditions. Use the published edition for precise category names. For each risk relevant to the feature, identify an owner, a concrete control and observable evidence that the control still works.",
+    example: "For an invoice export, verify tenant-scoped access, parameterized filters, private storage and a bounded failure path. Expire the storage credential in a test and verify the export fails safely and produces an actionable alert.",
+    implications: "For an invoice download, verify ownership on the server and log a denied decision without logging private content. Record the edition when discussing category names because the list evolves."
+  },
+  "application-security__owasp-essentials-sqli-xss-csrf-how-net-defends": {
+    overview: "Bind SQL parameters to separate values from query structure. Encode untrusted text in its output context to prevent script interpretation. For cookie-authenticated state changes, validate an antiforgery token where required.",
+    question: "Where do .NET defenses apply, and where can they be lost?",
+    walkthrough: "EF parameterized queries protect value binding when the application preserves the separation between SQL and data. Razor encodes ordinary rendered text, but different contexts such as URLs or script need appropriate handling and raw HTML explicitly bypasses encoding. Cookie-based forms typically need antiforgery validation on state changes. Validate each boundary independently because an endpoint can be sound at one layer and unsafe at another.",
+    example: "Trace a customer-supplied display name through storage, a Razor text element and an administrative export. Review how each destination interprets the value and keep its context-specific protection at that destination.",
+    implications: "Map the control to the boundary. Parameterizing a query cannot make raw HTML output trustworthy, and HTML encoding cannot establish that a browser intentionally submitted a transfer."
+  },
+  "application-security__cors-vs-csrf-people-confuse-these": {
+    overview: "CORS governs when a page may read a cross-origin response. CSRF concerns a browser sending an unwanted authenticated state-changing request. A browser can sometimes send a request even when the page cannot read the result.",
+    question: "Why can a request change state even if the browser blocks the response?",
+    walkthrough: "The same-origin policy and CORS govern the browser’s ability to expose a response to another origin. For certain requests the browser can send the network request before applying a response-sharing decision. Whether cookies accompany it depends on cookie and browser policy, including SameSite. The server should verify user intent for authenticated state changes with appropriate antiforgery protection rather than relying on response visibility.",
+    example: "Test a legitimate cross-origin frontend reading permitted resources, then test a cookie-authenticated form submission without a valid antiforgery token. The CORS and antiforgery tests should exercise distinct decisions.",
+    implications: "For a cookie-backed settings form, require appropriate antiforgery protection and choose cookie SameSite settings deliberately. Configure cross-origin access separately for legitimate client applications."
+  },
+  "application-security__validating-a-jwt-key-rotation": {
+    overview: "An API should accept only tokens intended for that API and issued by an authority it trusts. Validate the signature with trusted issuer keys, allowed algorithms, audience, issuer and token lifetime.",
+    question: "What happens when the issuer starts signing with a new key?",
+    walkthrough: "Published issuer metadata points to trusted signing keys. A token’s key identifier can select among those keys, but the token must not dictate an arbitrary trusted issuer or key source. On a new key ID, refresh trusted metadata under bounded rate and cache rules. Keep valid overlapping old keys as appropriate for outstanding tokens. Continue verifying signature, issuer, audience and lifetime on every accepted token.",
+    example: "During a staged rollover, test a valid old-key token, a valid new-key token and an unknown untrusted key. Observe refresh traffic and rejection reasons without recording the token itself.",
+    implications: "Use issuer metadata and bounded key refresh to support rotation. Cache trusted keys appropriately and handle an unknown key without accepting an unverifiable token or hammering discovery."
+  },
+  "application-security__https-tls-what-it-actually-gives-you": {
+    overview: "TLS provides confidentiality and integrity in transit and normally authenticates the server through certificate and hostname verification. It protects data only between the endpoints of that TLS connection.",
+    question: "Which guarantees end when TLS terminates?",
+    walkthrough: "TLS negotiates session keys and protects the confidentiality and integrity of data in transit between its peers. Normal client validation checks certificate trust and the intended hostname. TLS does not establish that the person using an application may access a particular account, and data can be exposed after decryption in logs or storage. Each proxy termination creates a new trust boundary.",
+    example: "Draw browser → gateway → application → database. Mark where each TLS connection ends, which identity was verified and who can read the resulting plaintext. This identifies where a separate encrypted and authenticated hop is required.",
+    implications: "Trace the full route when a load balancer terminates TLS. Decide how the next hop is protected and continue enforcing application authorization for the data after decryption."
+  },
+  "application-security__password-storage-hashing-salting-work-factor": {
+    overview: "Store a password verifier produced by a dedicated salted password-hashing algorithm. A distinct random salt prevents equal passwords from yielding the same stored verifier, and the work factor raises the cost of each guess.",
+    question: "How does password verification work after changing the work factor?",
+    walkthrough: "Store the algorithm, salt, cost parameters and derived verifier according to a maintained password-hashing format. On sign-in, use the stored parameters to verify the supplied password. After success, compare the stored policy with today’s target and rehash at the new cost if needed. A memory-hard function can raise both memory and computation costs for guessing. Size verification resources under concurrent legitimate load.",
+    example: "Two users choosing the same password should receive distinct salted verifiers. After increasing the configured cost, an existing user should still sign in and receive an upgraded verifier without storing or recovering plaintext.",
+    implications: "Use a maintained password hasher, choose cost through measurement and retain algorithm parameters with the verifier. Upgrade older hashes after successful authentication."
+  },
+  "application-security__secrets-management-key-vault": {
+    overview: "Give a workload an identity authorized to read its specific secret from a vault. This removes the need to distribute a shared bootstrap password with the application package.",
+    question: "How can a secret rotate without breaking every running instance?",
+    walkthrough: "Separate the workload’s identity from the secret it needs. Authorize that identity for only required operations and distinguish permissions for reading a secret, managing it and using a key. Give cached secrets bounded lifetimes and plan a period where old and new credentials both work when the provider permits it. Observe which version each instance uses without recording the value.",
+    example: "Publish credential V2, update or refresh consumers, verify authenticated calls with V2 and only then retire V1. Test how a long-running worker behaves if its cache refresh fails halfway through rollout.",
+    implications: "Rotate credentials with an overlap period where the dependency permits it. Test how running instances refresh cached values and keep secret contents out of logs and error responses."
+  },
+  "application-security__multi-tenant-isolation-data-authz-everywhere": {
+    overview: "Derive tenant context from a verified identity and authorization decision, then carry it through queries, cache keys, object storage and background jobs. A client-supplied tenant identifier needs an entitlement check.",
+    question: "Where must tenant identity travel outside an HTTP request?",
+    walkthrough: "Resolve authorized tenant context before data access and carry it explicitly into message envelopes, scheduled jobs, cache key generation, file paths, search indexes and exports. On consumption, validate the identity and authority of the producer and the allowed tenant operation. Database row policies and composite keys can reinforce application filters. A cross-tenant support role needs narrowly scoped, auditable behavior.",
+    example: "Schedule two exports with the same invoice number from different tenants. Verify output rows, generated filenames, object access policies and download links. Correct SQL filtering alone does not prevent a storage-path collision.",
+    implications: "Test two tenants with overlapping resource IDs across detail pages, exports and asynchronous work. Treat cross-tenant administrative access as a distinct, audited permission."
+  },
+  "application-security__encryption-at-rest-in-transit-kms-key-vault": {
+    overview: "Disk or database encryption protects stored media. TLS protects a connection. Envelope encryption can use a managed key to wrap data keys so access to stored ciphertext and key use can be governed separately.",
+    question: "How does envelope encryption separate key management from bulk encryption?",
+    walkthrough: "Generate a data-encryption key to encrypt the payload using a suitable authenticated scheme. Wrap that data key with a managed key and store the wrapped key and required metadata alongside the ciphertext. Limit unwrap permission and record key use. Rotating a wrapping key may permit rewrapping data keys, depending on the design, without re-encrypting every large payload. Restoration requires access to the correct historical keys.",
+    example: "Recover a backup into a controlled environment. Verify it can obtain the authorized old key version, decrypt a known record and reject a modified ciphertext. A readable backup file alone is not an end-to-end recovery test.",
+    implications: "Trace who can decrypt at each stage, including backups and recovery. Exercise key rotation and restoration because deleting the only usable key can make intact ciphertext unrecoverable."
+  },
+  "application-security__mtls-for-service-to-service": {
+    overview: "In mutual TLS, both peers present credentials and verify the identity of the other endpoint. A workload identity in a client certificate can identify which service is making a connection.",
+    question: "How does a certificate become a service authorization decision?",
+    walkthrough: "During the TLS handshake each side proves possession of a private key associated with a trusted certificate. Validate chain, lifetime and the expected peer identity under the workload identity scheme. Map that identity to permitted operations and keep the policy narrow. Service-mesh termination may mean the application receives peer identity through trusted local infrastructure, which must preserve the binding.",
+    example: "Payments accepts a connection from orders and one from reporting. Both can have valid certificates under the same CA. Only orders should be authorized to submit a charge if reporting is entitled only to summaries.",
+    implications: "Issue short-lived certificates, automate renewal and map verified identities to explicit permissions. Successful peer authentication alone does not authorize every operation exposed by the destination."
+  },
+  "application-security__dependency-supply-chain-scanning-sbom": {
+    overview: "A software bill of materials records what components and versions went into an artifact. Scanning that inventory against advisories helps a team identify affected releases even when a vulnerability is announced after deployment.",
+    question: "How do you go from an advisory to a verified production fix?",
+    walkthrough: "Generate an inventory from the actual build, including transitive components, and associate it with an immutable artifact digest. Compare the inventory with advisories, determine which deployed versions are exposed, and assess affected code paths. Patch or replace the component, rebuild through the trusted pipeline and verify the new digest reaches running workloads. An SBOM aids discovery while signatures and provenance answer different integrity questions.",
+    example: "An advisory arrives for library L. Query deployed digests containing the affected version, map them to services and owners, then verify the replacement digest and fresh inventory after rollout. A clean source dependency file alone is insufficient.",
+    implications: "Link the inventory to the deployed artifact digest, verify provenance and prioritize remediation using exposure and reachability. Rebuild and verify the replacement so a manifest edit does not masquerade as a production fix."
+  },
+  "oop-solid-design-patterns__solid-kiss-dry-and-when-to-break-them": {
+    overview: "Two pricing functions that look similar can encode different promises. One estimates a cart total, while the other produces the legally agreed invoice total. The important duplication is a rule that must change together.",
+    question: "How would you choose between duplicating and abstracting those rules?",
+    walkthrough: "Identify the business owner, invariant and likely reason for change. DRY helps when both callers depend on the same knowledge. KISS favors the simplest representation that makes that knowledge clear. SOLID helps place responsibilities so a new policy has a small, predictable impact. Extracting a function with five flags just to remove matching lines makes future changes harder to review.",
+    example: "A promotion starts rounding estimated prices to whole units, while invoices still round to cents. Separate estimation and settlement policies allow one change. Share the currency rounding primitive only when its contract is identical.",
+    implications: "In an interview, name the next realistic change and walk through how many callers it affects. That is more informative than counting interfaces or duplicated lines."
+  },
+  "oop-solid-design-patterns__clean-hexagonal-architecture-the-dependency-rule": {
+    overview: "Hexagonal architecture separates the application’s use cases from the mechanisms that call them or supply external capabilities. Clean Architecture similarly places high-level policy behind boundaries that protect it from framework and storage details.",
+    question: "Why can a use case call outward while source dependencies point inward?",
+    walkthrough: "An application use case declares the port it needs, such as reserving inventory. An infrastructure adapter implements the port using SQL. At runtime the use case calls the adapter through that contract. At compile time the adapter depends on the application’s port, while the application never imports the database driver. Dependency injection at startup connects the pieces.",
+    example: "HTTP cancellation endpoint → CancelOrder use case → inventory port → SQL adapter. A queue consumer can call the same CancelOrder use case. Test the rule with an in-memory port, then integration-test the real adapter’s transaction semantics.",
+    implications: "A port returning IQueryable or vendor exceptions can leak the external implementation back into policy. Shape the contract around the operation and failure modes the use case needs."
+  },
+  "oop-solid-design-patterns__ddd-building-blocks-you-should-name": {
+    overview: "A domain model expresses business decisions using names meaningful to the people making them. Entities maintain identity across change, while value objects are compared by their meaningful components. An aggregate defines which changes must preserve invariants together.",
+    question: "How do the building blocks cooperate during checkout?",
+    walkthrough: "An Order entity owns line items and the transition from draft to submitted. Money is a value object carrying amount and currency. The aggregate root rejects submission of an empty order. A domain service can calculate a rule spanning concepts where no one entity owns all the information. An application service coordinates loading, invoking and saving. A repository provides an aggregate-oriented persistence boundary.",
+    example: "Load order 81, apply its agreed price policy, call Submit, persist the order and record OrderSubmitted. Test rejection of a second submission on the aggregate itself and test persistence and event handoff at the application boundary.",
+    implications: "A class named Service or Repository adds little unless its responsibility is clear. Explain which component enforces the invariant under concurrent writes."
+  },
+  "oop-solid-design-patterns__ddd-depth-aggregates-bounded-contexts-domain-events-ubiquitous-languag": {
+    overview: "An aggregate protects an immediate consistency rule. A bounded context protects a coherent meaning for concepts and language. One bounded context commonly contains many aggregates. Domain events describe facts that other parts of the model may react to.",
+    question: "How do different meanings of “order” affect architecture?",
+    walkthrough: "Sales needs an order’s agreed lines and total. Fulfillment needs packages, addresses and shipment progress. Their models overlap in identity but evolve under different rules. Domain experts help name the concepts precisely. Sales can publish a versioned integration event derived from a committed domain change. Fulfillment translates it into its own commands and handles delayed or duplicate events.",
+    example: "Sales commits an accepted order, then fulfillment creates a shipment later. Grouping every sales and warehouse record into one aggregate would serialize independent work. Track pending fulfillment as an expected state and reconcile failed handoffs.",
+    implications: "Place an invariant inside one aggregate when it truly must be atomic. If two contexts need a synchronous guarantee, make the cost and authority explicit rather than assuming events enforce it."
+  },
+  "oop-solid-design-patterns__repository-unit-of-work-with-ef-still-needed": {
+    overview: "A DbContext coordinates tracked changes across sets, and SaveChanges persists a unit of work. Wrapping every DbSet with identical CRUD methods can obscure projections, transactions and query behavior without creating a useful domain boundary.",
+    question: "When does a custom repository improve the design?",
+    walkthrough: "A domain-facing repository can load an aggregate in the shape needed to preserve its invariants and expose a meaningful operation such as finding orders awaiting settlement. Let the outer use case own the commit boundary so two related writes cannot be independently committed through separate repositories. A read-only report can use a direct DTO projection without loading an aggregate at all.",
+    example: "If OrderRepository.Add immediately calls SaveChanges and OutboxRepository.Add calls it again, the order may commit alone. Stage both changes in the same context and commit at the use-case boundary.",
+    implications: "Keep real-provider integration tests for translation, constraints and concurrency. A fake repository can test domain decisions but cannot establish that the production query is correct."
+  },
+  "oop-solid-design-patterns__strategy-factory-decorator-observer-net-examples": {
+    overview: "All four patterns can appear in one notification flow, but each answers a different design question. Strategy chooses behavior, a factory constructs or selects an object, a decorator wraps a compatible operation, and Observer distributes notifications to interested listeners.",
+    question: "How would you identify them from the call path?",
+    walkthrough: "A routing strategy chooses a channel based on preferences. A factory resolves the sender configured for that channel. A metrics decorator implements the sender contract and delegates to the inner sender while recording duration. Subscribers observe an accepted-delivery event. Establish whether observers are synchronous and how exceptions affect the publisher before using them for required business steps.",
+    example: "An email times out. The decorator records one failed send attempt, the strategy’s original choice remains email, and no accepted-delivery event should fire. A safe retry policy belongs where delivery identity and provider behavior are known.",
+    implications: "Name the responsibility and failure contract of each collaborator. The same interface-and-implementation syntax can express several patterns, so class names alone cannot explain a design."
+  },
+  "oop-solid-design-patterns__gof-patterns-beyond-those-creational-structural-behavioral": {
+    overview: "The GoF families group recurring design decisions. Creational patterns move construction decisions, structural patterns organize relationships among objects, and behavioral patterns organize responsibility and communication. Start from the source of change before choosing a family.",
+    question: "Which patterns fit building and exporting a document tree?",
+    walkthrough: "A Builder can incrementally assemble a validated document. Composite lets a section contain paragraphs and nested sections behind a common traversal contract. Visitor can add export operations over known node types without putting every export format into every node. The trade-off is that introducing a new node type can require changing every visitor. An Adapter is useful when one exporter must target an incompatible external API.",
+    example: "Adding Markdown export means adding a visitor for existing node types. Adding a new Chart node means updating all visitors. Which change is more frequent should influence whether Visitor pays for itself.",
+    implications: "Compare patterns with similar shapes by intent. A Facade simplifies a subsystem, an Adapter translates a contract and a Proxy controls access to an existing contract."
+  },
+  "oop-solid-design-patterns__mediator-mediatr-in-process-cqrs": {
+    overview: "A mediator dispatches a request to its handler inside the application. In-process CQRS can use distinct handlers and result types for commands and queries while sharing one deployment and database. Dispatch is an ordinary in-process operation with the same failure domain as its caller.",
+    question: "What belongs in the pipeline and what belongs in the handler?",
+    walkthrough: "A pipeline behavior can validate input, record duration or establish a transaction around selected commands. The handler owns the business use case and uses explicitly injected dependencies. Separate read handlers can project directly into response DTOs. Publishing an in-process notification does not durably enqueue it. A process crash still loses work that was never recorded outside memory.",
+    example: "SubmitOrder handler succeeds and the process exits before an email notification handler runs. Persist the notification intent with the order if the email is required. The mediator is a routing mechanism, not a delivery guarantee.",
+    implications: "Use a mediator when the dispatch and shared pipeline simplify real use cases. A direct method call can be clearer for a small service with no common pipeline needs."
+  },
+  "oop-solid-design-patterns__di-done-right-the-service-locator-anti-pattern": {
+    overview: "Constructor injection shows what an object needs to do its job. The composition root chooses implementations and lifetimes. A service locator hides collaborators behind calls to a general-purpose resolver and often delays configuration errors until a particular branch runs.",
+    question: "When is resolving a dependency dynamically appropriate?",
+    walkthrough: "A host, job dispatcher or plugin boundary sometimes must create a scope and resolve a handler selected at runtime. Keep that resolution at the composition boundary or behind a narrow typed factory. The domain operation should declare the capability it needs, so a caller can construct and test it without assembling a container. Validate scopes and required registrations at startup where possible.",
+    example: "A RefundService taking IPaymentProvider and IRefundLedger exposes its two collaborators. If it instead takes IServiceProvider, a missing ledger registration may first appear during a real refund.",
+    implications: "Use dependency lifetime as part of the design. Explicit injection makes it easier to notice a singleton retaining a request-scoped context."
+  },
+  "oop-solid-design-patterns__composition-over-inheritance": {
+    overview: "Inheritance makes a derived object substitutable under a base contract when its behavior honors that contract. Composition builds behavior from collaborators. It is especially useful when several independent dimensions can vary, such as format, compression and destination.",
+    question: "Why does combining independent variations in subclasses grow expensive?",
+    walkthrough: "A hierarchy with CsvExporter and JsonExporter may be manageable until both need encrypted and compressed variants for two destinations. Each combination duplicates or inherits implementation details. Instead compose a formatter, a stream transformation and a destination. Each component gets one reason to change and can be tested against its own contract. Use inheritance for a genuine stable abstraction whose invariants derived types can preserve.",
+    example: "Build JSON → gzip → file and CSV → gzip → network with the same compression component. Ensure wrapper disposal flushes compression before the destination is closed, a lifecycle rule introduced by composition.",
+    implications: "Composition also introduces wiring and indirect calls. For one stable behavior a straightforward implementation can remain easier to read."
+  },
+  "oop-solid-design-patterns__anti-corruption-layer-null-object-result-option": {
+    overview: "Translate external meanings at the boundary, then model intentional absence and expected failure explicitly. An anti-corruption layer maps between domain languages. Option represents a value that may be absent. Result captures success or an expected reason an operation failed. A Null Object provides a legitimate neutral behavior.",
+    question: "When does treating absence as a no-op create a bug?",
+    walkthrough: "An optional metrics sink can safely do nothing when telemetry is disabled. A missing payment gateway cannot safely report that a charge succeeded. Likewise, a legacy lookup returning one code for “unknown customer” and another for “service unavailable” needs a translation that preserves that distinction. Option alone loses the reason for an operational failure; Result can carry that outcome explicitly.",
+    example: "Map an unknown customer to a successful lookup with no customer, an upstream timeout to an unavailable result, and a valid row to a customer. Test all three before letting checkout decide how to proceed.",
+    implications: "Choose the representation from what the caller must decide next. A neutral substitute is correct only when doing nothing genuinely satisfies the contract."
+  },
+  "oop-solid-design-patterns__when-you-should-not-apply-a-pattern-overengineering": {
+    overview: "A pattern has a cost in navigation, vocabulary, wiring and testing. It earns that cost when it simplifies an identifiable change, isolates a real dependency or protects a meaningful invariant. A single implementation can justify a boundary when its external effects are significant.",
+    question: "How would you evaluate a pattern proposed in code review?",
+    walkthrough: "Write the smallest direct implementation, name the expected variation, and sketch the diff needed when that variation arrives. Compare failure handling and testing with the proposed pattern. If the extra structure only renames a method and every change still edits all layers, defer it. If it isolates an unstable payment SDK or creates one enforceable consistency boundary, the immediate value may justify it.",
+    example: "A two-line date formatter rarely needs a factory and strategy registry. A single external payment adapter can still justify a port because timeout ambiguity, testing and provider credentials are real concerns today.",
+    implications: "Record the signal that would warrant revisiting the decision, such as a second independent policy or repeated changes across multiple modules. This keeps the decision reversible."
+  },
 };
+
+// Older viewer pages iterate paragraphs; newer pages read the named sections.
+// Keep both interfaces on each entry when HTML and data refresh independently.
+for (const [id, lesson] of Object.entries(window.ASTRA_EXPLANATIONS)) {
+  const paragraphs = [
+    lesson.overview, lesson.question, lesson.walkthrough, lesson.example, lesson.implications
+  ];
+  window.ASTRA_EXPLANATIONS[id] = Object.assign(paragraphs, lesson);
+}
