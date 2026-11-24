@@ -4591,4 +4591,324 @@ RUN dotnet publish ...</code></pre>
 </ul>
 <div class="say"><strong>Say this:</strong> "For secrets I never put plaintext in values.yaml since it's in git — I use helm-secrets with SOPS or an external store like the Secrets Store CSI driver. For versioning, Chart.yaml has two versions: the chart's own version, bumped with SemVer, and appVersion for the app image it deploys, and I publish to a chart repository. For testing, helm lint catches errors, helm template renders locally to inspect, and helm test runs test Pods against a deployed release. In CI I lint, template and install into a kind cluster before shipping."</div>
 `,
+
+"logging__the-three-pillars-logs-metrics-traces-how-they-complement": `
+<p class="lead">Observability = understanding a system's internal state from its outputs, via three <em>complementary</em> pillars.</p>
+<ul>
+<li><strong>Logs:</strong> discrete, timestamped events — "what happened"; great for a specific error, but high-volume.</li>
+<li><strong>Metrics:</strong> numeric aggregates over time — "how many"; cheap, perfect for dashboards and alerting, but no per-request detail.</li>
+<li><strong>Traces:</strong> the path of one request across services with per-span timing — "where it went / what was slow".</li>
+</ul>
+<p>They work together: a <em>metric</em> alerts you something's wrong, a <em>trace</em> shows the slow hop, <em>logs</em> show the exact error — correlated by a trace/correlation id, increasingly unified through OpenTelemetry.</p>
+<div class="say"><strong>Say this:</strong> "Observability means understanding the system from its outputs via three complementary pillars. Logs are discrete timestamped events — what happened, great for a specific error but high-volume. Metrics are numeric aggregates — how many, cheap and perfect for dashboards and alerting but no per-request detail. Traces follow one request across services with per-span timing. Together, a metric alerts me, a trace points to the slow hop, and logs show the exact error — correlated by a trace id, increasingly unified through OpenTelemetry."</div>
+`,
+
+"logging__structured-logging-events-with-properties-not-string-concat": `
+<p class="lead">Log events as <strong>structured data</strong> (key-value properties), not a formatted string.</p>
+<p>Instead of baking the user id into a plain message you can only grep, log a <strong>message template</strong> — <code>"User {UserId} failed login"</code> — with <code>UserId</code> captured as a property. The log store (Seq, ELK, App Insights) then indexes <code>UserId</code>, so you can <strong>query, filter and aggregate</strong> by it ("all failures for user 42", "count by status").</p>
+<p>The template keeps a human-readable message <em>and</em> machine-queryable fields. In .NET use <code>ILogger</code> with <strong>named placeholders</strong>, never string interpolation — interpolation loses the structure.</p>
+<div class="say"><strong>Say this:</strong> "Structured logging records events as key-value properties, not a formatted string. Instead of interpolating the user id into the message, I use a template like 'User {UserId} failed login' with UserId captured as a property, so the store indexes it and I can query and aggregate — all failures for user 42, counts by status. The template keeps a readable message and queryable fields. In .NET I use ILogger with named placeholders, never string interpolation, because interpolation loses the structure."</div>
+`,
+
+"logging__log-levels-when-to-use-each-trace-critical": `
+<p class="lead">Levels rank severity so you can filter noise and route appropriately.</p>
+<ul>
+<li><strong>Trace / Debug:</strong> detailed step-by-step diagnostics — dev-only, off in prod.</li>
+<li><strong>Information:</strong> normal significant events (a request handled, a job ran) — the prod baseline.</li>
+<li><strong>Warning:</strong> unexpected but handled/recoverable (a retry, a fallback, deprecated use).</li>
+<li><strong>Error:</strong> a failed operation (an exception caught, a request failed) — needs attention.</li>
+<li><strong>Critical:</strong> the app or a major component is unusable — page someone.</li>
+</ul>
+<p>Set the minimum level per environment (Information in prod, Debug in dev); keep Info quiet; support a <strong>runtime level override</strong> to diagnose a live issue without redeploy.</p>
+<div class="say"><strong>Say this:</strong> "Levels rank severity so I filter noise. Trace and Debug are detailed diagnostics for dev, off in prod. Information is normal significant events — the prod baseline. Warning is unexpected-but-handled, like a retry. Error is a failed operation needing attention. Critical is the app being unusable — page someone. I set the minimum level per environment, keep Info quiet, and support a runtime level override so I can turn on Debug for a live issue without a redeploy."</div>
+`,
+
+"logging__serilog-sinks-enrichers-message-templates": `
+<p class="lead"><strong>Serilog</strong> is the leading structured-logging library for .NET.</p>
+<ul>
+<li><strong>Sinks</strong> — where logs go (Console, File, Seq, Elasticsearch, App Insights); configure several.</li>
+<li><strong>Enrichers</strong> — automatically add contextual properties to every log (machine name, environment, correlation id) via the <code>LogContext</code>.</li>
+<li><strong>Message templates</strong> — the structured <code>{Property}</code> syntax that captures properties.</li>
+</ul>
+<p>It plugs into Microsoft's <code>ILogger</code>. Push per-request context with <code>LogContext.PushProperty</code> (or scopes) so a correlation id enriches every log in that request.</p>
+<div class="say"><strong>Say this:</strong> "Serilog is the leading structured-logging library for .NET. Sinks define where logs go — Console, File, Seq, Elasticsearch, App Insights — and I can write to several. Enrichers automatically add context to every log, like machine name, environment and a correlation id, via the LogContext. Message templates capture properties with the {Property} syntax. It plugs into Microsoft's ILogger, and I push per-request properties like a correlation id with PushProperty so they enrich every log in that request."</div>
+`,
+
+"logging__seq-structured-log-server-querying": `
+<p class="lead"><strong>Seq</strong> is a log server built for <em>structured</em> logs — it ingests structured events (pairs perfectly with Serilog) and lets you query them by their <strong>properties</strong> with a SQL-like language, filter, aggregate, build dashboards, and set alerts.</p>
+<p>Because logs are structured, you query "Level = Error and UserId = 42 in the last hour" instead of grepping text. Lightweight and easy to self-host — popular for dev and small-to-mid .NET deployments.</p>
+<p>For cloud/large scale you'd use App Insights or ELK, but Seq is excellent when a .NET team wants structured querying without heavy infra.</p>
+<div class="say"><strong>Say this:</strong> "Seq is a log server built for structured logs — it ingests structured events, which pairs perfectly with Serilog, and lets me query by properties with a SQL-like language, filter, aggregate and alert. Because the logs are structured I query 'Level = Error and UserId = 42 in the last hour' instead of grepping text. It's lightweight and easy to self-host, popular for small-to-mid .NET deployments. For cloud scale I'd use App Insights or ELK, but Seq is excellent for structured querying without heavy infra."</div>
+`,
+
+"logging__elk-elastic-stack-elasticsearch-logstash-kibana": `
+<p class="lead">The <strong>Elastic Stack</strong> centralizes logs and search.</p>
+<ul>
+<li><strong>Elasticsearch</strong> — a distributed search/analytics engine that stores and indexes the logs (fast full-text + structured search).</li>
+<li><strong>Logstash</strong> — the ingestion/processing pipeline (collect, parse, transform); lightweight <strong>Beats</strong> (Filebeat) ship logs.</li>
+<li><strong>Kibana</strong> — the UI for search, visualization, dashboards, alerting.</li>
+</ul>
+<p>Flow: app logs → Beats/Logstash → Elasticsearch → Kibana. Powerful and scalable for huge volumes across many services, but <strong>operationally heavy</strong> (a cluster to run and tune).</p>
+<div class="say"><strong>Say this:</strong> "The Elastic Stack centralizes logs: Elasticsearch is a distributed search engine that stores and indexes logs for fast full-text and structured search; Logstash is the ingestion and processing pipeline, with lightweight Beats like Filebeat shipping logs; and Kibana is the UI for search, dashboards and alerting. The flow is app logs through Beats or Logstash into Elasticsearch, visualized in Kibana. It's powerful and scales to huge volumes, but it's operationally heavy to run and tune."</div>
+`,
+
+"logging__azure-application-insights-traces-logs-kql-log-analytics": `
+<p class="lead"><strong>Application Insights</strong> is Azure's APM / observability service (part of Azure Monitor) — the default observability stack for .NET on Azure.</p>
+<p>It <strong>auto-collects telemetry</strong> from a .NET app — requests, dependency calls (SQL/HTTP with timing), exceptions, logs, custom metrics, and distributed traces across services — with minimal setup. Data lands in <strong>Log Analytics</strong>, queried with <strong>KQL</strong> (Kusto Query Language).</p>
+<p>Features: an <strong>application map</strong> (service topology + health), live metrics, smart detection, and end-to-end transaction (distributed trace) views — correlating logs, metrics and traces by operation id.</p>
+<div class="say"><strong>Say this:</strong> "Application Insights is Azure's APM, part of Azure Monitor. It auto-collects telemetry from a .NET app — requests, dependency calls with timing, exceptions, logs, custom metrics and distributed traces — with minimal setup. The data lands in Log Analytics and I query it with KQL to correlate requests, exceptions and dependencies. It gives an application map, live metrics, and end-to-end transaction views. It's the default observability stack for .NET on Azure, correlating logs, metrics and traces by operation id — and I watch sampling for cost and keep PII out."</div>
+`,
+
+"logging__correlation-id-propagate-across-services-attach-to-every-log": `
+<p class="lead">A <strong>correlation id</strong> is a unique identifier assigned to a request and <em>propagated</em> through every service, log and trace involved — so you can find everything that happened for one request across a distributed system.</p>
+<ul>
+<li><strong>Generate</strong> it at the edge (or accept an incoming one from a header).</li>
+<li><strong>Attach</strong> it to the logging context so every log line carries it.</li>
+<li><strong>Propagate</strong> it downstream in headers on every outgoing HTTP/gRPC/message call.</li>
+</ul>
+<p>Then "show me everything for request X" is one query. In .NET the W3C trace id usually serves this, carried by <code>Activity</code> and enriched onto logs. Without it, debugging a request across microservices is impossible.</p>
+<div class="say"><strong>Say this:</strong> "A correlation id is a unique id assigned to a request and propagated through every service, log and trace, so I can find everything that happened for one request across a distributed system. I generate it at the edge or accept it from a header, attach it to the logging context so every log line carries it, and propagate it downstream in headers on every call. Then 'show me everything for request X' is one query. In .NET the W3C trace id usually serves this, carried by Activity. Without it, cross-microservice debugging is impossible."</div>
+`,
+
+"logging__centralized-logging-what-not-to-log-secrets-pii-tokens": `
+<p class="lead"><strong>Centralized logging</strong> ships logs from all services/instances to one aggregated store (App Insights, ELK, Seq, Loki) so you search the whole system in one place — essential for distributed systems, since you can't SSH into N containers. Structured logs + a correlation id make it queryable.</p>
+<div class="warn"><strong>What NOT to log:</strong> secrets, passwords, tokens, API keys; PII (emails, names, card numbers, SSNs — GDPR/compliance); full request/response bodies with sensitive data; auth headers. Logging a password or card number is a breach — <strong>redact and mask</strong> sensitive fields.</div>
+<p>Also avoid over-logging (noise + cost) and manage retention.</p>
+<div class="say"><strong>Say this:</strong> "Centralized logging ships logs from every service and instance to one store — App Insights, ELK, Seq or Loki — so I search the whole system in one place, essential for distributed systems since I can't SSH into every container. Structured logs plus a correlation id make it queryable. And I'm deliberate about what NOT to log: never secrets, tokens, or PII like emails and card numbers — that's a breach and a compliance problem — so I redact and mask sensitive fields, and avoid over-logging to control noise and cost."</div>
+`,
+
+"metrics__metric-types-counters-gauges-histograms-summaries": `
+<p class="lead">Four fundamental metric types — pick by the shape of what you're measuring.</p>
+<ul>
+<li><strong>Counter:</strong> a cumulative value that only increases (or resets) — total requests, errors, bytes. You query the <em>rate</em> of increase.</li>
+<li><strong>Gauge:</strong> a value that goes up and down — current memory, queue depth, active connections. A snapshot.</li>
+<li><strong>Histogram:</strong> buckets observations (request durations) so you can compute percentiles (p50/p95/p99); bucket counts <strong>aggregate across instances</strong>.</li>
+<li><strong>Summary:</strong> computes quantiles client-side — but <strong>can't be aggregated across instances</strong> (the key difference from a histogram).</li>
+</ul>
+<p>Prefer histograms for latency so percentiles aggregate across the fleet.</p>
+<div class="say"><strong>Say this:</strong> "A counter only increases — total requests or errors — and I query its rate. A gauge goes up and down — current memory, queue depth, active connections. A histogram buckets observations like request durations so I can compute p95 and p99, and the buckets aggregate across instances. A summary computes quantiles client-side but can't aggregate across instances, which is the key difference. I prefer histograms for latency so percentiles aggregate across the fleet."</div>
+`,
+
+"metrics__prometheus-pull-model-scraping-promql-exporters": `
+<p class="lead"><strong>Prometheus</strong> is the de-facto open-source metrics system, with a <strong>pull model</strong>: it <em>scrapes</em> a <code>/metrics</code> HTTP endpoint on each target at an interval, discovering targets via service discovery.</p>
+<ul>
+<li>Apps expose metrics via a client library; things you can't instrument use <strong>exporters</strong> (node_exporter for host metrics).</li>
+<li>Data is time series keyed by <strong>metric name + labels</strong>.</li>
+<li><strong>PromQL</strong> queries it — <code>rate()</code>, aggregations (<code>sum by</code>), and <code>histogram_quantile</code> for percentiles.</li>
+</ul>
+<p>Pull means Prometheus notices when a target is down (the scrape fails). Pairs with Grafana; the standard for cloud-native metrics.</p>
+<div class="say"><strong>Say this:</strong> "Prometheus is the de-facto metrics system with a pull model — it scrapes a /metrics endpoint on each target at an interval, discovering targets via service discovery. Apps expose metrics with a client library, and exporters cover what you can't instrument, like node_exporter for host metrics. Data is time series keyed by name plus labels, queried with PromQL — rate, aggregations, and histogram_quantile for percentiles. Pull means Prometheus notices when a target is down. It pairs with Grafana and is the cloud-native standard."</div>
+`,
+
+"metrics__grafana-dashboards-alerting-on-metrics": `
+<p class="lead"><strong>Grafana</strong> is the leading open-source visualization/dashboarding tool — it connects to many data sources (Prometheus, Loki, Elasticsearch, App Insights) and renders dashboards of graphs, heatmaps and tables.</p>
+<p>You build panels with queries, organize them into dashboards, and template with <strong>variables</strong> (per service/environment). <strong>Grafana Alerting</strong> evaluates rules against the metrics and fires notifications (Slack, PagerDuty) with grouping and silencing.</p>
+<p>It's the visualization layer; Prometheus (or another TSDB) stores the data. Grafana + Prometheus + Loki (logs) + Tempo (traces) is a full open-source observability stack.</p>
+<div class="say"><strong>Say this:</strong> "Grafana is the leading visualization tool — it connects to sources like Prometheus, Loki and App Insights and renders dashboards of graphs, heatmaps and tables. I build panels with queries, template them with variables per service, and use Grafana Alerting to evaluate rules and fire to Slack or PagerDuty with grouping and silencing. It's the visualization layer while Prometheus stores the data. Good dashboards follow RED and USE and show SLOs. Grafana with Prometheus, Loki and Tempo is a full open-source stack."</div>
+`,
+
+"metrics__opentelemetry-metrics-in-net-system-diagnostics-metrics-meter": `
+<p class="lead"><strong>OpenTelemetry (OTel)</strong> is the vendor-neutral standard for telemetry (traces, metrics, logs) — one SDK, export anywhere.</p>
+<p>In .NET, metrics are built on <code>System.Diagnostics.Metrics</code>: create a <code>Meter</code>, then instruments — <code>Counter&lt;T&gt;</code>, <code>Histogram&lt;T&gt;</code>, <code>ObservableGauge&lt;T&gt;</code>, <code>UpDownCounter&lt;T&gt;</code> — and record measurements (<code>counter.Add</code>, <code>histogram.Record</code>) with tags (labels). The OTel SDK collects and exports them (a Prometheus endpoint, or OTLP to a collector).</p>
+<p>ASP.NET Core and the runtime emit built-in metrics (requests, GC, thread pool). The win: a standard API — swap backends without changing instrumentation, and correlate with traces.</p>
+<div class="say"><strong>Say this:</strong> "OpenTelemetry is the vendor-neutral standard for traces, metrics and logs — one SDK, export anywhere. In .NET, metrics are built on System.Diagnostics.Metrics: I create a Meter and instruments like Counter, Histogram and ObservableGauge, and record measurements with tags. The OTel SDK collects and exports them — a Prometheus endpoint or OTLP to a collector. ASP.NET Core and the runtime already emit built-in metrics for requests, GC and the thread pool. The win is a standard API, so I swap backends without changing instrumentation and correlate metrics with traces."</div>
+`,
+
+"metrics__red-method-rate-errors-duration-for-request-services": `
+<p class="lead"><strong>RED</strong> is what to measure for a <em>request-driven service</em>:</p>
+<ul>
+<li><strong>Rate</strong> — requests per second.</li>
+<li><strong>Errors</strong> — failed requests per second (or error rate %).</li>
+<li><strong>Duration</strong> — the latency distribution (p50/p95/p99).</li>
+</ul>
+<p>Those three answer "is this service healthy?" for any request handler and map directly to user experience. Put a RED dashboard on every service and alert on error-rate and latency SLO breaches.</p>
+<p>It's the service view, complementing USE (for resources), and close to Google's golden signals (latency, traffic, errors, saturation).</p>
+<div class="say"><strong>Say this:</strong> "RED is what to measure for a request-driven service: Rate — requests per second, Errors — failed requests or error rate, and Duration — the latency distribution, p95 and p99. Those three answer 'is this service healthy?' and map directly to user experience. I put a RED dashboard on every service and alert on error-rate and latency SLO breaches. It's the service view, complementing USE for resources, and close to Google's golden signals."</div>
+`,
+
+"metrics__use-method-utilization-saturation-errors-for-resources": `
+<p class="lead"><strong>USE</strong> is what to measure for a <em>resource</em> (CPU, memory, disk, network, a connection pool, a queue):</p>
+<ul>
+<li><strong>Utilization</strong> — how busy it is (% time busy).</li>
+<li><strong>Saturation</strong> — how much extra work is queued/waiting (the degree of overload — the leading indicator).</li>
+<li><strong>Errors</strong> — error events for that resource.</li>
+</ul>
+<p><strong>Saturation is the key early warning</strong> — a thread pool backing up or a connection pool exhausting before utilization even hits 100%. It complements RED: RED watches the service/request path, USE watches the resources underneath.</p>
+<div class="say"><strong>Say this:</strong> "USE is what to measure for a resource like CPU, memory, a connection pool or a queue: Utilization — how busy it is, Saturation — how much work is queued or waiting, and Errors. Saturation is the key early warning — a thread pool backing up or a connection pool exhausting before utilization even hits 100%. For every resource I check USE. It complements RED: RED watches the service, USE watches the resources underneath, so together they tell me the service is healthy and which resource is the bottleneck."</div>
+`,
+
+"metrics__slis-slos-and-error-budgets": `
+<p class="lead">The SRE reliability framework.</p>
+<ul>
+<li><strong>SLI</strong> (Indicator): a measured, user-centric health metric — e.g. % of requests served successfully under 200ms.</li>
+<li><strong>SLO</strong> (Objective): the target for an SLI over a window — e.g. 99.9% over 30 days. (An <strong>SLA</strong> is the contractual version with penalties.)</li>
+<li><strong>Error budget:</strong> 100% − SLO — the <em>allowed</em> failure. 99.9% leaves ~43 min/month.</li>
+</ul>
+<p>You "spend" the budget on incidents and risky releases: burning it too fast → slow down and fix reliability; having budget → ship faster. It aligns reliability with velocity — don't chase 100%. Alert on <strong>error-budget burn rate</strong>.</p>
+<div class="say"><strong>Say this:</strong> "An SLI is a user-centric health metric, like the percentage of requests served under 200ms. An SLO is the target over a window — say 99.9% over 30 days — and an SLA is the contractual version. The error budget is 100% minus the SLO, so 99.9% leaves about 43 minutes a month. I spend it on incidents and risky releases: burning it too fast means slow down and fix reliability, having budget means ship faster. It aligns reliability with velocity, and I alert on burn rate rather than chasing 100%."</div>
+`,
+
+"metrics__alerting-on-symptoms-not-causes-avoid-alert-fatigue": `
+<p class="lead">Alert on what <strong>users experience</strong> (symptoms), not on every internal cause.</p>
+<ul>
+<li><strong>Symptom-based</strong> (page): high error rate, high latency, SLO burn — users are affected.</li>
+<li><strong>Cause-based</strong> (often noise): CPU 80%, a pod restarted, disk 70% — may not affect users and they multiply (one incident → 20 alerts).</li>
+</ul>
+<div class="warn">Too many alerts → <strong>alert fatigue</strong> → people tune them out → the real one is missed.</div>
+<p>Every page must be <strong>actionable and user-impacting</strong> (else it's a dashboard, not an alert); route lower severity to tickets; alert on SLO burn rate; group related alerts; attach runbooks.</p>
+<div class="say"><strong>Say this:</strong> "I alert on symptoms users feel — high error rate, high latency, SLO burn — not every internal cause like CPU at 80% or a pod restart, which are often noise and multiply, firing twenty alerts for one incident. Too many alerts cause fatigue, people tune them out, and the real one gets missed. So every page must be actionable and user-impacting — if it needs no human action it's a dashboard, not an alert — lower severity goes to tickets, I alert on SLO burn rate, group related alerts, and attach runbooks. Fewer meaningful alerts beat many noisy ones."</div>
+`,
+
+"metrics__label-cardinality-explosion-the-classic-metrics-pitfall": `
+<p class="lead">In dimensional metrics (Prometheus, OTel), <strong>each unique combination of a metric's labels is a separate time series</strong>. Cardinality = the number of distinct series.</p>
+<div class="warn">A <strong>high-cardinality label</strong> — user id, request id, email, a URL with embedded ids, a timestamp — explodes the series count into millions, blowing up memory, storage and query speed, and can crash Prometheus.</div>
+<p><strong>Rule:</strong> labels must be <em>bounded / low-cardinality</em> — status code, method, the route <em>template</em> (<code>/orders/{id}</code>, not <code>/orders/123</code>), service, region — never unbounded values. High-cardinality identifiers belong in logs/traces, not metric labels.</p>
+<div class="say"><strong>Say this:</strong> "In dimensional metrics, every unique combination of labels is a separate time series, and cardinality is the number of series. A high-cardinality label — user id, request id, or a URL with embedded ids — explodes the series count into millions, which blows up memory, storage and query speed and can crash Prometheus. So labels must be bounded and low-cardinality — status code, method, the route template like /orders/{id}, service, region — never unbounded values. High-cardinality identifiers belong in logs and traces, not metric labels."</div>
+`,
+
+"distributed-tracing__distributed-tracing-follow-one-request-across-services": `
+<p class="lead"><strong>Distributed tracing</strong> follows a single request as it flows through multiple services, recording the path and timing of each step — so you can see where the time went and which service failed, across the call graph.</p>
+<p>The whole journey is a <strong>trace</strong>; each operation — a service handling it, a DB call, an outbound HTTP call — is a <strong>span</strong> with timing and metadata, and spans form a tree giving a <em>waterfall</em> view.</p>
+<p>It answers "this request was slow — which hop?" and "where did it fail?" — which per-service logs can't. Essential for microservices; the third observability pillar.</p>
+<div class="say"><strong>Say this:</strong> "Distributed tracing follows one request through many services, recording the path and timing of each step, so I see where the time went and which service failed across the call graph. The whole journey is a trace; each operation — a service, a DB call, an outbound HTTP call — is a span with timing and metadata, and spans form a tree giving a waterfall. It answers 'this request was slow, which hop?' and 'where did it fail?' — which per-service logs can't. It's the third observability pillar."</div>
+`,
+
+"distributed-tracing__trace-id-span-id-parent-span-the-trace-tree": `
+<p class="lead">A trace is a <strong>tree of spans</strong>.</p>
+<ul>
+<li><strong>Trace ID:</strong> one unique id shared by <em>every</em> span in the request's journey — ties the whole trace together.</li>
+<li><strong>Span ID:</strong> a unique id for each individual operation.</li>
+<li><strong>Parent span ID:</strong> each span references its parent, forming a tree — the entry point is the root, and a downstream call's span has the caller's span as its parent.</li>
+</ul>
+<p>Each span carries a name, start/end time (→ duration), status, and attributes. Propagating the trace id + parent span id across service boundaries is what stitches the tree together into the waterfall you see in the UI.</p>
+<div class="say"><strong>Say this:</strong> "A trace is a tree of spans. The trace id is one id shared by every span in the request's journey, tying it together. Each operation is a span with its own span id, and each references its parent span id, forming a tree — the entry point is the root and a downstream call's span has the caller's as parent. Every span carries a name, timing, status and attributes. Propagating the trace id and parent span id across boundaries is exactly what stitches the tree into the waterfall."</div>
+`,
+
+"distributed-tracing__trace-context-propagation-inject-extract-across-calls": `
+<p class="lead">For a trace to span services, the <strong>trace context</strong> (trace id + current span id + flags) must travel with each outgoing call.</p>
+<ul>
+<li><strong>Inject</strong> it into the request (headers) on the caller side.</li>
+<li><strong>Extract</strong> it on the callee side and continue the trace (create a child span).</li>
+</ul>
+<p>This links spans across process/network boundaries — over HTTP/gRPC via headers, and over <strong>messaging</strong> by attaching context to the message metadata so an async consumer continues the trace. OpenTelemetry does inject/extract automatically for HTTP; for custom transports (queues) you do it manually. Without propagation you get disconnected spans, not one trace.</p>
+<div class="say"><strong>Say this:</strong> "For a trace to span services, the trace context — trace id, current span id and flags — travels with each outgoing call: I inject it into the request headers on the caller side and extract it on the callee side to continue with a child span. That links spans across boundaries over HTTP and gRPC headers, and over messaging by attaching context to the message metadata so an async consumer continues the trace. OpenTelemetry does this automatically for HTTP; for queues I do it manually. Without propagation I get disconnected spans."</div>
+`,
+
+"distributed-tracing__w3c-trace-context-traceparent-tracestate-headers": `
+<p class="lead"><strong>W3C Trace Context</strong> is the standard spec for propagating trace context over HTTP, so tools from different vendors interoperate.</p>
+<ul>
+<li><strong>traceparent</strong> — carries the version, trace-id, parent span-id (the caller's span), and trace-flags (e.g. sampled), in a fixed format.</li>
+<li><strong>tracestate</strong> — optional vendor-specific key-value context.</li>
+</ul>
+<p>Before W3C, each system had its own format (Zipkin's B3), breaking interop. Now it's the default in .NET (<code>Activity</code> uses W3C) and OpenTelemetry — so a request traced through a .NET service, a Java service, and a proxy keeps one trace id.</p>
+<div class="say"><strong>Say this:</strong> "W3C Trace Context is the standard for propagating trace context over HTTP so tools from different vendors interoperate. It defines two headers: traceparent carries the version, trace id, the caller's span id and flags like sampled; and tracestate carries optional vendor-specific key-values. Before it, each system had its own format like Zipkin's B3, which broke interop. Now it's the default in .NET — Activity uses W3C — and in OpenTelemetry, so a request across a .NET service, a Java service and a proxy keeps one trace id."</div>
+`,
+
+"distributed-tracing__opentelemetry-tracing-in-net-activity-activitysource": `
+<p class="lead">In .NET, distributed tracing is built on <code>System.Diagnostics.Activity</code> — <strong>an Activity is a span</strong>.</p>
+<p>You create an <code>ActivitySource</code> and call <code>StartActivity</code> to begin a span; it captures timing and joins the trace tree, with the trace id propagated via W3C <code>traceparent</code>. ASP.NET Core, <code>HttpClient</code> and many libraries are <strong>already instrumented</strong>, so an incoming request and its outgoing calls form a trace with no manual code — you just add tags and custom spans for your own operations.</p>
+<p>The OpenTelemetry SDK listens to <code>ActivitySource</code> and exports traces (OTLP → Jaeger, Tempo, App Insights). Activity is the API; OTel is the export.</p>
+<div class="say"><strong>Say this:</strong> "In .NET, tracing is built on System.Diagnostics.Activity — an Activity is a span. I create an ActivitySource and call StartActivity to begin a span; it captures timing and joins the trace tree, with the trace id propagated via W3C traceparent. ASP.NET Core, HttpClient and many libraries are already instrumented, so an incoming request and its outgoing calls form a trace with no manual code, and I add tags and custom spans for my own operations. The OpenTelemetry SDK listens to ActivitySource and exports by OTLP to Jaeger, Tempo or App Insights."</div>
+`,
+
+"distributed-tracing__jaeger-trace-backend-ui-service-graph": `
+<p class="lead"><strong>Jaeger</strong> is a popular open-source distributed tracing backend (CNCF).</p>
+<ul>
+<li>A <strong>collector</strong> receives spans (OTLP/Jaeger protocol), pluggable <strong>storage</strong> (Elasticsearch, Cassandra, in-memory), and a query <strong>UI</strong>.</li>
+<li>The UI shows the trace <strong>waterfall</strong>, lets you search by service/operation/tags/duration, and renders a <strong>service dependency graph</strong> derived from traces.</li>
+</ul>
+<p>Point your OpenTelemetry exporter at it. Great for finding latency bottlenecks and errors in a request path. Grafana Tempo is a cheaper-storage alternative; App Insights is the Azure equivalent.</p>
+<div class="say"><strong>Say this:</strong> "Jaeger is a popular open-source tracing backend from the CNCF. It has a collector that receives spans, pluggable storage like Elasticsearch or Cassandra, and a query UI that shows the trace waterfall, lets me search by service, operation, tags or duration, and renders a service dependency graph derived from traces. I point my OpenTelemetry exporter at it. It's great for finding latency bottlenecks and errors in a request path. Grafana Tempo is a cheaper alternative and App Insights is the Azure equivalent."</div>
+`,
+
+"distributed-tracing__zipkin-trace-backend-b3-propagation": `
+<p class="lead"><strong>Zipkin</strong> is another open-source tracing system (originally from Twitter) — the older sibling of Jaeger, with the same idea: collect spans, store them, and show trace waterfalls and dependency diagrams.</p>
+<p>Its notable legacy is the <strong>B3 propagation</strong> headers (<code>X-B3-TraceId</code>, <code>X-B3-SpanId</code>, <code>X-B3-ParentSpanId</code>, <code>X-B3-Sampled</code>) — the de-facto standard <em>before</em> W3C Trace Context, still supported in Spring Cloud and service meshes.</p>
+<p>Modern systems use W3C <code>traceparent</code>, but you may need B3 to interoperate with older Zipkin-instrumented services. The key distinction is <strong>B3 vs W3C</strong> propagation.</p>
+<div class="say"><strong>Say this:</strong> "Zipkin is another open-source tracing system, originally from Twitter and the older sibling of Jaeger — same idea: collect spans, store them, show trace waterfalls and dependency diagrams. Its notable legacy is the B3 propagation headers, X-B3-TraceId and friends, which were the de-facto standard before W3C Trace Context and are still supported in Spring Cloud and meshes. Modern systems use W3C traceparent, but I might need B3 to interoperate with older Zipkin services. The key distinction is B3 versus W3C."</div>
+`,
+
+"distributed-tracing__sampling-head-vs-tail-probabilistic-control-cost": `
+<p class="lead">Tracing every request is expensive at scale (storage, overhead), so you <strong>sample</strong> — keep a subset of traces.</p>
+<ul>
+<li><strong>Head-based:</strong> decide at the <em>start</em> of the trace, usually probabilistically (keep 10%) — simple and low-overhead, and the decision propagates via the sampled flag so the whole trace is consistently kept. But it's random, so it can drop the interesting slow/error traces.</li>
+<li><strong>Tail-based:</strong> buffer all spans and decide at the <em>end</em>, after seeing the whole trace — so you keep all errors and slow traces and sample the boring fast ones. Much better signal, but needs a collector that buffers everything (more memory).</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Tracing every request is expensive at scale, so I sample. Head-based sampling decides at the start, usually probabilistically like keeping 10%, and propagates that via the sampled flag so the whole trace is consistently kept — simple but random, so it can drop the interesting slow or error traces. Tail-based sampling buffers all spans and decides at the end, after seeing the whole trace, so I keep all errors and slow traces and sample the boring fast ones — far better signal, but it needs a collector that buffers everything. I balance cost against keeping the traces that matter."</div>
+`,
+
+"distributed-tracing__correlating-traces-with-logs-metrics-exemplars": `
+<p class="lead">The three pillars are most powerful when <strong>correlated</strong>, and the glue is the <strong>trace id</strong>.</p>
+<ul>
+<li>Put the trace id (and span id) into <em>every log line</em> (via the logging context) — so from a trace you jump to the exact logs, and from an error log you open the full trace.</li>
+<li><strong>Exemplars:</strong> attach a trace id to a specific metric sample (a latency bucket) — so from a spike on a dashboard you click straight to an example trace that caused it, bridging metrics → traces.</li>
+</ul>
+<p>OpenTelemetry unifies all three with shared context. The workflow: a metric alerts → an exemplar trace shows the slow request → its trace id finds the logs with the exact error.</p>
+<div class="say"><strong>Say this:</strong> "The three pillars are most powerful correlated, and the glue is the trace id. I put it into every log line via the logging context, so from a trace I jump to the exact logs and from an error log I open the full trace. Exemplars attach a trace id to a metric sample, so from a latency spike on a dashboard I click straight to an example trace that caused it. OpenTelemetry unifies all three with shared context. The workflow is: a metric alerts, an exemplar trace shows the slow request, and its trace id finds the logs with the exact error."</div>
+`,
+
+"production-troubleshooting__diagnose-high-cpu-memory-leak-threadpool-starvation": `
+<p class="lead">A systematic approach to the three classic .NET production problems.</p>
+<ul>
+<li><strong>High CPU:</strong> capture a CPU profile (<code>dotnet-trace</code>) to find the hot methods — usually a tight loop, serialization, regex, or excessive GC.</li>
+<li><strong>Memory leak:</strong> take heap snapshots over time (<code>dotnet-gcdump</code>) and diff them to see which type is growing and what <em>roots</em> it — often a static collection, an un-unsubscribed event, or an unbounded cache.</li>
+<li><strong>Thread-pool starvation:</strong> rising timeouts that look like the DB/Redis is slow while CPU is <em>low</em> — caused by sync-over-async (<code>.Result</code>/<code>.Wait</code>) blocking pool threads. Check the thread-pool queue with <code>dotnet-counters</code>.</li>
+</ul>
+<p>Method: metrics to localize, then profile/dump to find the cause.</p>
+<div class="say"><strong>Say this:</strong> "I work it systematically. For high CPU I capture a profile with dotnet-trace to find the hot methods — usually a tight loop, serialization, or excessive GC. For a memory leak I take gcdump snapshots over time and diff them to see which type is growing and what roots it — a static collection, an un-unsubscribed event, or an unbounded cache. For thread-pool starvation the tell is rising timeouts that look like Redis or SQL is slow while CPU is low — sync-over-async blocking pool threads — so I check the thread-pool queue with dotnet-counters. Metrics to localize, then a profile or dump to find the cause."</div>
+`,
+
+"production-troubleshooting__reading-a-profile-flame-graph": `
+<p class="lead">A <strong>profile</strong> samples the call stack over time to show where CPU (or allocations) go. A <strong>flame graph</strong> visualizes it.</p>
+<ul>
+<li>Each box is a stack frame; <strong>width</strong> = how much time/samples that function (and its callees) took; depth = the call hierarchy (callers below, callees above).</li>
+<li><strong>Read it by width:</strong> the widest boxes are the hottest paths. A wide box high up is an expensive leaf; a wide tower is a deep hot chain.</li>
+</ul>
+<p>Look for a surprise wide frame (unexpected hotspot), wide GC/allocation frames (GC pressure), or wide lock/wait frames (contention). It tells you where the time actually goes instead of guessing.</p>
+<div class="say"><strong>Say this:</strong> "A profile samples the call stack over time, and a flame graph visualizes it — each box is a stack frame, its width is how much time that function and its callees took, and depth is the call hierarchy. I read it by width: the widest boxes are the hottest paths. A wide box high up is an expensive leaf; a wide tower is a deep hot chain. I look for a surprise wide frame, wide GC frames meaning allocation pressure, or wide lock frames meaning contention. It tells me where the time actually goes."</div>
+`,
+
+"production-troubleshooting__debug-an-intermittent-production-issue": `
+<p class="lead">Intermittent issues (happen sometimes, can't reproduce locally) are the hardest. Work them with evidence, not guesses.</p>
+<ol>
+<li><strong>Correlate</strong> logs/metrics/traces around the failures — what's common? (a time, a tenant, a node, load, a dependency).</li>
+<li><strong>Look for patterns</strong> — does it track deploys, traffic spikes, GC pauses, a cron job, a specific input, replication lag, a slow dependency?</li>
+<li><strong>Add targeted observability</strong> (logging/tracing with correlation ids) around the suspect area; form a hypothesis and test it under load/canary.</li>
+</ol>
+<p>Common culprits: race conditions, resource exhaustion under load, thread-pool starvation, timeouts/retries, stale cache, a flaky dependency, time/timezone, cold starts. <strong>Capture a dump while it's happening</strong> — don't guess-and-restart, which destroys the evidence.</p>
+<div class="say"><strong>Say this:</strong> "Intermittent issues are the hardest because you can't reproduce them. I correlate logs, metrics and traces around the failures to find what's common — a time, a tenant, a node, load, a dependency — then look for patterns against deploys, traffic spikes, GC pauses or replication lag. I add targeted observability with correlation ids around the suspect area, form a hypothesis, and test it under load or a canary. The usual culprits are race conditions, resource exhaustion, thread-pool starvation and flaky dependencies. And I capture a dump while it's happening rather than guessing and restarting, which throws away the evidence."</div>
+`,
+
+"production-troubleshooting__redis-database-diagnostics-slow-queries-pool-exhaustion-timeouts": `
+<p class="lead">The common data-layer production problems and how to diagnose them.</p>
+<ul>
+<li><strong>Slow queries:</strong> check Query Store / <code>pg_stat_statements</code>, pull the execution plan, look for missing indexes, scans, a bad plan (parameter sniffing), or stale stats.</li>
+<li><strong>Connection pool exhaustion:</strong> "timeout, all pooled connections in use" — leaked connections, long transactions, or sync-over-async. Check active/sleeping sessions; fix with disposal, short transactions, async.</li>
+<li><strong>Timeouts:</strong> classify <em>server</em> (slow query, locking/blocking) vs <em>client</em> (thread-pool starvation delaying the completion callback — the Redis/SQL timeout that's really a client problem).</li>
+<li><strong>Redis:</strong> check <code>SLOWLOG</code>, big keys, O(N) commands, the single-threaded blocking, and client thread-pool starvation.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "For slow queries I check Query Store or pg_stat_statements, pull the plan, and look for missing indexes, scans, or a bad plan from parameter sniffing. Pool exhaustion shows as 'timeout, all connections in use' — usually leaked connections, long transactions, or sync-over-async — so I check sessions and fix with disposal and async. For timeouts I classify server versus client: a slow query or lock on the server, versus thread-pool starvation on the client delaying the callback — the Redis or SQL timeout that's really a client problem. For Redis I check SLOWLOG, big keys and O(N) commands."</div>
+`,
+
+"production-troubleshooting__dotnet-diagnostics-counters-trace-dump-gcdump": `
+<p class="lead">The cross-platform .NET diagnostics CLI tools for production (they attach by process id and work in containers).</p>
+<ul>
+<li><strong>dotnet-counters:</strong> live counters (CPU, GC, thread-pool queue/threads, exceptions, lock contention) — low overhead, the first tool for "what's happening now" (spotting thread-pool starvation, GC pressure).</li>
+<li><strong>dotnet-trace:</strong> capture a profile (CPU sampling, events) — analyze as a flame graph in PerfView/Speedscope.</li>
+<li><strong>dotnet-dump:</strong> a full memory dump — analyze with SOS (threads, stacks, heap, deadlocks) for a hang/crash.</li>
+<li><strong>dotnet-gcdump:</strong> a lightweight heap snapshot (types + sizes + roots) — diff two to find a memory leak.</li>
+</ul>
+<p><code>dotnet-monitor</code> exposes all of these over HTTP in containers.</p>
+<div class="say"><strong>Say this:</strong> "The dotnet diagnostics CLI tools are my production toolkit. dotnet-counters shows live counters — CPU, GC, thread-pool queue, exceptions — low overhead, the first thing I run to spot thread-pool starvation or GC pressure. dotnet-trace captures a profile I read as a flame graph in Speedscope. dotnet-dump takes a full memory dump I inspect with SOS for threads, stacks and deadlocks on a hang. dotnet-gcdump takes a lightweight heap snapshot of types and roots for memory leaks by diffing two. And dotnet-monitor exposes all of this over HTTP in containers."</div>
+`,
+
+"production-troubleshooting__incident-response-root-cause-analysis-blameless-postmortems": `
+<p class="lead">A disciplined process for production incidents.</p>
+<h2>During</h2>
+<p>Declare the incident with a <strong>severity</strong>; assign roles (an <strong>incident commander</strong> to coordinate, a comms lead, responders); establish a channel; update stakeholders regularly; and <strong>mitigate first</strong> — restore service (roll back, failover, scale) <em>before</em> chasing root cause.</p>
+<h2>After</h2>
+<p>A <strong>postmortem</strong>: a written timeline, the impact, the root cause (5 Whys / contributing factors), what went well/poorly, and <strong>action items with owners</strong> to prevent recurrence.</p>
+<div class="warn"><strong>Blameless:</strong> focus on systems and processes, not individuals — people act reasonably on the information they had. Fix the missing guardrail or alerting gap, not the person; blame hides the truth.</div>
+<div class="say"><strong>Say this:</strong> "During an incident I declare it with a severity and assign roles — an incident commander to coordinate, a comms lead, and responders — establish a channel, update stakeholders, and mitigate first to restore service by rolling back or failing over, before chasing root cause. Afterward I run a blameless postmortem: a timeline, the impact, the root cause via the 5 Whys, what went well and poorly, and action items with owners. Blameless means I fix the system — the missing guardrail or alerting gap — not the person, because people act reasonably on the information they had, and blame just hides the truth."</div>
+`,
 };
