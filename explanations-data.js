@@ -3314,4 +3314,547 @@ FROM orders ORDER BY customer_id, created_at DESC;   -- latest order per custome
 <div class="warn"><strong>Caveats:</strong> it's fire-and-forget — a disconnected listener <em>misses</em> the message (not durable) — and the payload is small (~8KB). For durable messaging, use a real broker.</div>
 <div class="say"><strong>Say this:</strong> "Postgres has built-in pub/sub with LISTEN and NOTIFY — a session notifies a channel with a small payload on commit, and listening sessions receive it. I use it to wake a worker when a job row is inserted, often with a SKIP LOCKED queue, or for cache invalidation. But it's transactional fire-and-forget — a disconnected listener misses the message — so for durable messaging I'd still use a real broker."</div>
 `,
+
+"distributed-systems-architecture__microservices-vs-modular-monolith-when-to-split": `
+<p class="lead">Don't start with microservices. A <strong>modular monolith</strong> — one deployable with strong module boundaries — gives most of the benefits (clear ownership, separation) without the distributed-systems tax.</p>
+<h2>Split to services only for a concrete reason</h2>
+<ul>
+<li>A component needs <strong>independent scaling</strong> or a different runtime/tech.</li>
+<li>Teams need <strong>independent deploy cadence</strong> (Conway's law / org scale).</li>
+<li><strong>Fault isolation</strong> — one component's failure mustn't take down the rest.</li>
+</ul>
+<div class="warn"><strong>The cost of splitting:</strong> network latency and failure, eventual consistency, sagas instead of transactions, data duplication, and far more ops/observability overhead.</div>
+<div class="say"><strong>Say this:</strong> "I start with a modular monolith — one deployable with strong boundaries — because it gives clear ownership without the distributed tax. I split to microservices only for a concrete reason: independent scaling or deploy cadence, fault isolation, or org scale. Splitting buys independence but costs network failure, eventual consistency, sagas and ops overhead, so I extract services as boundaries prove themselves, not up front."</div>
+`,
+
+"distributed-systems-architecture__event-driven-architecture-pros-cons": `
+<p class="lead">Services communicate by publishing and subscribing to <strong>events</strong> rather than calling each other directly.</p>
+<table>
+<tr><th>Pros</th><th>Cons</th></tr>
+<tr><td>Loose coupling (producer doesn't know consumers)</td><td>Harder to reason about — no linear flow</td></tr>
+<tr><td>Buffering, scalability, resilience</td><td>Eventual consistency</td></tr>
+<tr><td>Easy fan-out / add a consumer to extend</td><td>Tracing across async hops; duplicates & ordering</td></tr>
+<tr><td>Natural audit trail</td><td>"Where is the overall state?"</td></tr>
+</table>
+<p>Use it for decoupled side effects, integration, and load leveling; keep synchronous request/response where you need an immediate answer.</p>
+<div class="say"><strong>Say this:</strong> "In event-driven architecture services publish events instead of calling each other. The wins are loose coupling, buffering and resilience — a consumer being down doesn't stop the producer — plus easy extension and an audit trail. The costs are harder reasoning with no linear flow, eventual consistency, distributed tracing, and handling duplicates and ordering. I use it for decoupled side effects and keep synchronous calls where I need an immediate answer."</div>
+`,
+
+"distributed-systems-architecture__cqrs-event-sourcing-what-when-worth-it": `
+<p class="lead"><strong>CQRS</strong> separates the <em>write</em> model (commands) from the <em>read</em> model (queries) — often different models/stores, each optimized (normalized transactional writes, denormalized fast reads). <strong>Event Sourcing</strong> stores state as an append-only log of events and derives current state by replaying them. They pair but are independent.</p>
+<h2>Benefits &amp; costs</h2>
+<ul>
+<li><strong>Benefits:</strong> optimized reads, full history/audit, temporal queries, rebuildable projections.</li>
+<li><strong>Costs:</strong> real complexity, eventual consistency between write and read models, event schema evolution, no trivial "current state" query.</li>
+</ul>
+<p>Worth it for complex domains, audit-heavy systems, and high read/write asymmetry — overkill for simple CRUD.</p>
+<div class="say"><strong>Say this:</strong> "CQRS separates the write model from the read model so each is optimized — normalized writes, denormalized reads — often in different stores. Event Sourcing stores state as an append-only event log and derives state by replaying it, giving full audit and rebuildable projections. They pair but are independent. The cost is complexity and eventual consistency between models, so I use them for complex, audit-heavy domains with read/write asymmetry, never for simple CRUD."</div>
+`,
+
+"distributed-systems-architecture__saga-orchestration-vs-choreography": `
+<p class="lead">A <strong>saga</strong> runs a distributed transaction as a sequence of <em>local</em> transactions, each with a <strong>compensating action</strong> to undo it on failure — because you can't two-phase-commit across services.</p>
+<ul>
+<li><strong>Orchestration:</strong> a central orchestrator drives each step and handles failures/compensation — explicit, easy to monitor and reason about, but a central coordinator.</li>
+<li><strong>Choreography:</strong> each service reacts to events and emits the next — decentralized and loosely coupled, but the flow is <em>implicit</em>, hard to trace, and can create cyclic dependencies.</li>
+</ul>
+<p>Orchestrate complex flows that need visibility; choreograph simple, loosely-coupled ones.</p>
+<div class="say"><strong>Say this:</strong> "A saga runs a distributed transaction as local transactions, each with a compensating action to undo on failure, because you can't two-phase-commit across services. Orchestration uses a central coordinator that drives steps and handles compensation — explicit and easy to monitor but centralized. Choreography has each service react to events and emit the next — decentralized but the flow is implicit and hard to trace. I orchestrate complex flows and choreograph simple ones."</div>
+`,
+
+"distributed-systems-architecture__cap-theorem-in-practical-terms": `
+<p class="lead">In a distributed system, during a <strong>network partition</strong> you must choose between <strong>Consistency</strong> (every read sees the latest write) and <strong>Availability</strong> (every request gets a response). You can't guarantee both while partitioned — that's CAP.</p>
+<p>Partition tolerance isn't optional in a distributed system, so the real choice <em>under partition</em> is C vs A:</p>
+<ul>
+<li><strong>CP</strong> systems reject or block during a partition to stay consistent.</li>
+<li><strong>AP</strong> systems stay available but may return stale data.</li>
+</ul>
+<p>When there's <em>no</em> partition you can have both. <strong>PACELC</strong> extends it: Else (no partition), you still trade Latency vs Consistency.</p>
+<div class="say"><strong>Say this:</strong> "CAP says that during a network partition you must choose consistency or availability — you can't guarantee both while partitioned. Partition tolerance isn't optional, so the real choice under partition is C versus A: a CP system rejects or blocks to stay consistent, an AP system stays up but may serve stale data. Without a partition you get both — and PACELC adds the everyday trade-off: even then you choose latency versus consistency."</div>
+`,
+
+"distributed-systems-architecture__two-phase-commit-why-avoided-eventual-consistency": `
+<p class="lead"><strong>Two-phase commit (2PC)</strong> coordinates an atomic commit across resources: a coordinator asks all participants to <em>prepare</em> (phase 1), then <em>commit or abort</em> (phase 2).</p>
+<div class="warn"><strong>Why it's avoided:</strong> it's <em>blocking</em> — if the coordinator crashes after prepare, participants hold locks indefinitely in an uncertain state. That kills availability and latency, doesn't scale, and the coordinator is a single point of failure.</div>
+<p>So distributed systems favor <strong>eventual consistency</strong> via sagas and the outbox pattern — local transactions, async propagation, and compensating actions — accepting a brief inconsistency window that converges. Business-level compensation beats distributed locks.</p>
+<div class="say"><strong>Say this:</strong> "Two-phase commit coordinates an atomic commit across resources — prepare, then commit — but it's blocking: if the coordinator dies after prepare, participants hold locks indefinitely, which kills availability and doesn't scale. So distributed systems avoid it and embrace eventual consistency instead — sagas and the outbox with local transactions, async propagation and compensations, accepting a brief window that converges. I prefer business-level compensation over distributed locks."</div>
+`,
+
+"distributed-systems-architecture__monolith-service-migration-strangler-fig-anti-corruption-layer": `
+<p class="lead">The <strong>strangler fig</strong> pattern migrates a monolith incrementally, avoiding a big-bang rewrite: put a proxy/gateway in front, extract one capability at a time into a new service and route it there, and grow the new system around the old until the monolith is "strangled" (retired).</p>
+<h2>Anti-corruption layer</h2>
+<p>Between the new service and the legacy model, add a translation layer so the legacy's data model and quirks <strong>don't leak</strong> into the new clean domain — it protects the new service's design. Migrate the data carefully (dual-write/sync, then backfill).</p>
+<div class="say"><strong>Say this:</strong> "I migrate a monolith with the strangler fig pattern — put a proxy in front, extract one capability at a time into a service and route it there, growing the new system around the old until the monolith is retired, avoiding a big-bang rewrite. Between the new service and the legacy model I put an anti-corruption layer that translates, so the legacy's quirks don't leak into the new domain, and I migrate the data with dual-write and backfill."</div>
+`,
+
+"distributed-systems-architecture__distributed-rate-limiting-resilience": `
+<p class="lead">A per-instance limiter only caps <em>per node</em>, so a <strong>global</strong> limit across replicas needs a <strong>shared counter</strong> — typically Redis.</p>
+<ul>
+<li><strong>Algorithms:</strong> token bucket (allows bursts), sliding window (smooth), fixed window (simple but boundary bursts). Implement with Redis <code>INCR</code> + TTL, or an atomic Lua script / sorted set of timestamps for a true sliding window.</li>
+<li><strong>Trade-offs:</strong> the central store adds latency and is a dependency — decide fail-open vs fail-closed; for scale, do approximate local limiting with periodic sync.</li>
+</ul>
+<p>Pair it with the broader resilience stack — timeouts, backoff retries, circuit breakers, bulkheads — and enforce the coarse limit at the edge (gateway/WAF).</p>
+<div class="say"><strong>Say this:</strong> "A per-instance limiter only caps per node, so a global limit needs a shared counter — Redis with an atomic Lua script for a sliding window, or INCR with a TTL. Token bucket allows bursts, sliding window smooths. The central store adds latency and is a dependency, so I decide fail-open vs fail-closed, and for scale I do approximate local limiting with periodic sync. I pair it with timeouts, backoff, circuit breakers and bulkheads, and enforce the coarse limit at the gateway."</div>
+`,
+
+"system-design-fundamentals__how-to-approach-any-system-design-question": `
+<p class="lead">Use a <strong>framework</strong>, don't jump to components. They're assessing how you reason, not a memorized answer.</p>
+<ol>
+<li><strong>Clarify requirements</strong> — functional (features) and non-functional (scale, latency, consistency, availability); ask the read/write ratio, QPS, data size.</li>
+<li><strong>Estimate</strong> — back-of-the-envelope traffic, storage, bandwidth.</li>
+<li><strong>API</strong> — the key endpoints.</li>
+<li><strong>High-level design</strong> — clients, load balancer, services, cache, DB, queue.</li>
+<li><strong>Data model &amp; storage</strong> — SQL/NoSQL, partitioning.</li>
+<li><strong>Deep-dive the bottleneck</strong> they care about — caching, sharding, consistency.</li>
+<li><strong>Scale, failure, trade-offs.</strong></li>
+</ol>
+<div class="say"><strong>Say this:</strong> "I use a framework rather than jumping to components: clarify functional and non-functional requirements and the scale, do a back-of-envelope estimate, sketch the API, then a high-level design — clients, load balancer, services, cache, database, queue — pick the data model and storage, and deep-dive the bottleneck they care about. Throughout I state assumptions and talk trade-offs out loud."</div>
+`,
+
+"system-design-fundamentals__back-of-the-envelope-estimation": `
+<p class="lead">Rough numbers to <em>size</em> the system — the goal is the right order of magnitude to justify a design choice, not precision.</p>
+<ul>
+<li>A day is ~<strong>10^5 seconds</strong> (86,400), so <strong>QPS = daily requests / 10^5</strong>; <strong>peak = average × 2–3</strong>.</li>
+<li><strong>Storage</strong> = rows × bytes/row × retention.</li>
+<li><strong>Latency ladder:</strong> memory ns, SSD µs, same-datacenter network ~0.5ms, cross-continent ~100ms, disk seek ~10ms.</li>
+</ul>
+<p>Round aggressively and let the number drive the design ("10k QPS → caching + horizontal scale").</p>
+<div class="say"><strong>Say this:</strong> "I size with round numbers: a day is about 10^5 seconds, so QPS is daily requests over 10^5, peaking at two-to-three times average; storage is rows times bytes times retention. I keep the latency ladder in mind — memory nanoseconds, SSD microseconds, same-datacenter half a millisecond, cross-continent 100ms. The goal is the right order of magnitude to justify choices like 'this is 10k QPS, so I need caching and horizontal scale', not precision."</div>
+`,
+
+"system-design-fundamentals__vertical-vs-horizontal-scaling": `
+<p class="lead"><strong>Vertical (scale up):</strong> a bigger machine — simple, no code change, but a ceiling, a single point of failure, and expensive at the top. <strong>Horizontal (scale out):</strong> more machines behind a load balancer — near-unlimited and fault-tolerant, but it needs stateless services and distributed data.</p>
+<p>Stateless app servers scale out trivially; the <strong>database is the hard part</strong> (sharding, replicas). Scale up first for simplicity, scale out when you hit limits or need high availability.</p>
+<div class="say"><strong>Say this:</strong> "Vertical scaling is a bigger machine — simple and no code change, but there's a ceiling, it's a single point of failure, and it's expensive at the top. Horizontal is more machines behind a load balancer — near-unlimited and fault-tolerant, but needs stateless services and distributed data, which is harder, especially for the database. I scale up first for simplicity and scale out for limits and HA; stateless servers scale out trivially, the stateful database is the real challenge."</div>
+`,
+
+"system-design-fundamentals__multi-layer-caching-browser-cdn-app-redis-db": `
+<p class="lead">Cache at <em>every</em> layer so each absorbs load from the one behind it.</p>
+<ol>
+<li><strong>Browser</strong> — static assets via <code>Cache-Control</code>.</li>
+<li><strong>CDN</strong> — edge cache near users.</li>
+<li><strong>Reverse proxy / gateway</strong> — response cache.</li>
+<li><strong>App in-memory (L1)</strong> — per-instance.</li>
+<li><strong>Distributed cache (Redis, L2)</strong> — shared.</li>
+<li><strong>Database buffer cache.</strong></li>
+</ol>
+<p>The cost of more layers is more staleness and invalidation complexity — use TTLs with jitter, a clear invalidation strategy, and cache only read-heavy data that tolerates staleness.</p>
+<div class="say"><strong>Say this:</strong> "I cache at every layer — browser via Cache-Control, CDN at the edge, a gateway cache, in-process L1, a distributed Redis L2, and the database's buffer cache — so each layer absorbs load from the one behind it. The cost is staleness and invalidation complexity, so I use TTLs with jitter and a clear invalidation strategy, and only cache read-heavy data that tolerates some staleness."</div>
+`,
+
+"system-design-fundamentals__sql-vs-nosql-how-to-choose": `
+<p class="lead"><strong>Relational (SQL)</strong> is the default — ACID transactions, flexible ad-hoc queries and joins, strong consistency, structured schema — especially for transactional data. Reach for <strong>NoSQL</strong> for a specific access pattern it serves better.</p>
+<table>
+<tr><th>NoSQL family</th><th>Best for</th></tr>
+<tr><td>Key-value (Redis, DynamoDB)</td><td>fast simple lookups</td></tr>
+<tr><td>Document (MongoDB)</td><td>flexible/evolving schema</td></tr>
+<tr><td>Wide-column (Cassandra)</td><td>massive write scale, time-series</td></tr>
+<tr><td>Graph (Neo4j)</td><td>relationship-heavy queries</td></tr>
+</table>
+<p>Polyglot persistence — using several — is normal.</p>
+<div class="say"><strong>Say this:</strong> "Relational is my default — ACID, flexible queries and joins, strong consistency — especially for transactional data. I reach for NoSQL for a specific pattern it serves better: key-value for fast lookups, document for flexible schema, wide-column like Cassandra for massive write scale and time-series, graph for relationships. So I lead with 'relational by default, NoSQL for a concrete pattern', and I'm fine with polyglot persistence."</div>
+`,
+
+"system-design-fundamentals__quorum-r-w-n": `
+<p class="lead">In a replicated store with <strong>N</strong> replicas, a quorum requires <strong>W</strong> replicas to ack a write and <strong>R</strong> replicas for a read.</p>
+<p>If <strong>R + W is greater than N</strong>, the read set and write set overlap by at least one replica, so a read is guaranteed to see the latest write — strong consistency. It's tunable:</p>
+<ul>
+<li><strong>N=3, W=2, R=2</strong> — balanced (the common default).</li>
+<li><strong>W=1</strong> (fast writes) or <strong>R=1</strong> (fast reads) — lower quorums trade consistency for higher availability and speed.</li>
+</ul>
+<p>Dynamo-style stores expose exactly these knobs.</p>
+<div class="say"><strong>Say this:</strong> "With N replicas, a quorum needs W to ack a write and R for a read. If R plus W exceeds N, the read and write sets overlap by at least one replica, so a read always sees the latest write — that's how you get strong consistency on a replicated store. N=3 with W=2 and R=2 is the balanced default; lower quorums trade consistency for availability and speed. Dynamo-style stores expose these knobs directly."</div>
+`,
+
+"system-design-fundamentals__cap-pacelc-per-feature-consistency": `
+<p class="lead"><strong>CAP:</strong> under a network partition, choose Consistency or Availability. <strong>PACELC:</strong> even without a partition (Else), you still trade Latency vs Consistency.</p>
+<div class="warn"><strong>The senior insight:</strong> consistency is not one global setting — <strong>choose it per feature</strong>. A payment or account balance needs strong consistency; a like-count, feed, or "last seen" tolerates eventual consistency for better availability and latency.</div>
+<p>Design each data flow for its actual need and use tunable consistency where the store allows it.</p>
+<div class="say"><strong>Say this:</strong> "CAP says under a partition you choose consistency or availability; PACELC adds that even without a partition you trade latency for consistency. The senior move is that consistency isn't one global setting — I choose it per feature. A payment or balance needs strong consistency, but a like-count or feed can be eventually consistent for better availability and latency. So I design each data flow for its actual need and use tunable consistency where the store allows it."</div>
+`,
+
+"system-design-fundamentals__consistent-hashing-hot-partitions": `
+<p class="lead">Naive hashing (<code>hash(key) % N</code>) remaps almost <em>every</em> key when you add or remove a server — a cache/shard catastrophe. <strong>Consistent hashing</strong> maps servers and keys onto a ring; a key goes to the next server clockwise, so adding/removing a node remaps only ~1/N of keys.</p>
+<p><strong>Virtual nodes</strong> (each physical node = many ring points) smooth the distribution and handle heterogeneity.</p>
+<div class="warn"><strong>It doesn't fix a hot key:</strong> a single popular key still overloads one node — mitigate with key-splitting, replicating the hot key, or a cache in front.</div>
+<div class="say"><strong>Say this:</strong> "Naive modulo hashing remaps almost every key when a server changes. Consistent hashing puts servers and keys on a ring and sends each key to the next server clockwise, so adding or removing a node only remaps about 1/N of keys, and virtual nodes smooth the distribution. It doesn't fix a hot key — a single popular key still overloads one node — so I split or replicate the key or put a cache in front. It's what Dynamo, Cassandra and Redis-cluster-style systems use."</div>
+`,
+
+"system-design-fundamentals__designing-for-high-availability-the-9s": `
+<p class="lead">Availability is measured in <strong>nines</strong>, and each nine is ~10x harder and costlier.</p>
+<table>
+<tr><td>99.9% (three nines)</td><td>~8.7 hours/year downtime</td></tr>
+<tr><td>99.99% (four nines)</td><td>~52 min/year</td></tr>
+<tr><td>99.999% (five nines)</td><td>~5 min/year</td></tr>
+</table>
+<p>Get there by eliminating single points of failure: redundant instances across availability zones, load balancing with health checks and automatic failover, database replication, graceful degradation (serve stale/limited rather than fail), and retries/circuit breakers. Remember a chain of dependencies <em>multiplies</em> failure.</p>
+<div class="say"><strong>Say this:</strong> "Availability is in nines — three nines is about nine hours of downtime a year, four nines about an hour, five nines about five minutes — and each nine is roughly ten times harder. I get there by removing single points of failure: redundant instances across availability zones, load balancing with health checks and automatic failover, database replication, and graceful degradation so I serve stale or limited results rather than fail. And a chain of dependencies multiplies failure, so I target the right number of nines rather than gold-plating."</div>
+`,
+
+"system-design-fundamentals__multi-region-dr-rpo-rto": `
+<p class="lead"><strong>RPO</strong> (Recovery Point Objective) = max acceptable <em>data loss</em> → drives replication/backup frequency. <strong>RTO</strong> (Recovery Time Objective) = max acceptable <em>downtime</em> to recover → drives failover automation.</p>
+<h2>DR ladder (cost / RTO)</h2>
+<ul>
+<li><strong>Backup &amp; restore</strong> — cheap, hours.</li>
+<li><strong>Pilot light</strong> — core running, scale up on failover.</li>
+<li><strong>Warm standby</strong> — scaled-down replica, minutes.</li>
+<li><strong>Active-active multi-region</strong> — near-zero RTO/RPO, highest cost &amp; complexity (needs conflict resolution).</li>
+</ul>
+<p>Multi-region adds latency and consistency challenges — async replication means an RPO window.</p>
+<div class="say"><strong>Say this:</strong> "RPO is how much data I can lose, which sets replication frequency; RTO is how long recovery can take, which sets failover automation. The DR ladder goes backup-and-restore for hours, pilot light, warm standby for minutes, up to active-active multi-region for near-zero RTO and RPO at the highest cost. Multi-region adds latency and consistency challenges — async replication means an RPO window, active-active needs conflict resolution — so I pick the tier by the business's tolerance for loss and downtime."</div>
+`,
+
+"system-design-fundamentals__backpressure-load-shedding": `
+<p class="lead">When demand exceeds capacity, push back rather than collapse.</p>
+<ul>
+<li><strong>Backpressure:</strong> signal upstream to slow down — bounded queues (the writer blocks when full), concurrency limits — so a fast producer can't swamp a slow consumer.</li>
+<li><strong>Load shedding:</strong> deliberately reject excess work early (return <strong>429/503</strong>), dropping low-priority requests first, to protect the system.</li>
+</ul>
+<p>A queue absorbs bursts, but sustained overload needs <em>shedding</em>, not an unbounded queue that just grows latency and memory. Better to serve most requests well than all of them badly.</p>
+<div class="say"><strong>Say this:</strong> "When demand exceeds capacity I push back instead of collapsing. Backpressure signals upstream to slow down — bounded queues where the writer blocks when full, concurrency limits — so a fast producer can't swamp a slow consumer. Load shedding deliberately rejects excess early with a 429 or 503, dropping low-priority requests first. A queue absorbs bursts, but sustained overload needs shedding, not an unbounded queue that just grows latency and memory. Better to serve most requests well than all of them badly."</div>
+`,
+
+"system-design-fundamentals__push-vs-pull-websockets-sse-long-polling": `
+<p class="lead"><strong>Pull</strong> is the client polling the server — simple but wasteful (empty polls) and laggy. <strong>Push</strong> sends when data is ready — efficient and real-time.</p>
+<table>
+<tr><th>Technique</th><th>Use for</th></tr>
+<tr><td>Long polling</td><td>hold the request open until data/timeout — near-real-time over plain HTTP (fallback)</td></tr>
+<tr><td>SSE (Server-Sent Events)</td><td>one-way server→client stream, auto-reconnect — notifications, feeds</td></tr>
+<tr><td>WebSockets</td><td>full-duplex persistent connection — chat, collaboration, games (needs a backplane to scale)</td></tr>
+</table>
+<div class="say"><strong>Say this:</strong> "Pull is the client polling — simple but wasteful and laggy; push sends when data is ready. Long polling holds a request open until there's data, giving near-real-time over plain HTTP. SSE is a one-way server-to-client stream with auto-reconnect, great for notifications and feeds. WebSockets are a full-duplex persistent connection for bidirectional low-latency use like chat, but need a backplane to scale. So SSE for server-push, WebSockets for two-way, long-polling as a fallback."</div>
+`,
+
+"system-design-fundamentals__bloom-filter-what-when": `
+<p class="lead">A <strong>Bloom filter</strong> is a space-efficient probabilistic set: it answers "possibly present" or "<em>definitely</em> not present" — <strong>no false negatives, some false positives</strong> — using a bit array and k hash functions, in tiny memory for huge sets.</p>
+<p>Use it to <strong>skip an expensive lookup</strong>: check the filter before hitting disk/DB/cache. Cassandra and HBase use it to skip SSTables; it's also a cache-penetration defense ("is this key worth looking up?"). Tune size and hash count for the false-positive rate; if you need deletes, use a <em>counting</em> Bloom filter.</p>
+<div class="say"><strong>Say this:</strong> "A Bloom filter is a compact probabilistic set that answers 'possibly present' or 'definitely not present' — no false negatives, some false positives — using a bit array and k hash functions, in tiny memory for huge sets. I use it to skip expensive lookups: check the filter before hitting disk or the database, which is how Cassandra skips SSTables and how you defend against cache penetration. I tune size and hashes for the false-positive rate, and use a counting Bloom filter if I need deletes."</div>
+`,
+
+"system-design-fundamentals__distributed-unique-id-generator-snowflake": `
+<p class="lead">You need unique, roughly <strong>time-sortable</strong> 64-bit ids across many servers without coordination.</p>
+<ul>
+<li><strong>UUID:</strong> 128-bit, random, no coordination — but large and <em>not sortable</em> (poor clustered key).</li>
+<li><strong>Snowflake:</strong> 64-bit = timestamp (ms) + worker/machine id + per-ms sequence → unique, time-ordered, compact, no central coordinator. The standard for distributed sortable ids.</li>
+<li><strong>DB auto-increment:</strong> simple but a central bottleneck / single point of failure.</li>
+</ul>
+<p>Watch clock skew (NTP, monotonic clock) and worker-id assignment.</p>
+<div class="say"><strong>Say this:</strong> "I need unique, roughly time-sortable 64-bit ids across many servers without coordination. A UUID needs no coordination but is 128-bit and unsortable, bad as a clustered key. Snowflake packs a millisecond timestamp, a worker id, and a per-millisecond sequence into 64 bits — unique, time-ordered, compact, no central coordinator. A database auto-increment is simple but a central bottleneck. I'd use a Snowflake-style scheme and handle clock skew and worker-id assignment carefully."</div>
+`,
+
+"system-design-fundamentals__when-to-put-a-message-queue-in-the-design": `
+<p class="lead">Add a queue/broker when you need one of these:</p>
+<ul>
+<li><strong>Decoupling</strong> — producer and consumer evolve/scale independently.</li>
+<li><strong>Load leveling</strong> — absorb bursts, smooth spiky traffic into steady processing.</li>
+<li><strong>Async processing</strong> — don't make the user wait for slow work (email, image processing, reports).</li>
+<li><strong>Reliability</strong> — durability, retries, dead-letter queues.</li>
+<li><strong>Fan-out</strong> — one event, many consumers.</li>
+</ul>
+<p>Don't add one where you need an immediate synchronous answer — it adds latency and a moving part.</p>
+<div class="say"><strong>Say this:</strong> "I add a queue to decouple producer and consumer so they scale independently, to level load by absorbing bursts, to do slow work asynchronously so the user doesn't wait — email, image processing, reports — to get durability with retries and a DLQ, or to fan one event out to many consumers. I don't add one where I need an immediate synchronous answer. The tells are a slow downstream, spiky load, deferrable work, or multiple consumers of an event."</div>
+`,
+
+"data-sharding-partitioning-replication__sharding-choosing-a-shard-key-avoiding-hotspots": `
+<p class="lead">Sharding splits data across nodes; the <strong>shard key</strong> decides which node holds a row — and it's the single most important choice.</p>
+<h2>A good shard key</h2>
+<ul>
+<li><strong>High cardinality</strong> (many distinct values → many shards).</li>
+<li><strong>Even distribution</strong> — no shard becomes a hotspot.</li>
+<li><strong>Matches the query pattern</strong> — so most queries hit one shard, not all (scatter-gather).</li>
+</ul>
+<div class="warn"><strong>Classic mistakes:</strong> a low-cardinality key; or a <em>monotonically increasing</em> key (a timestamp/auto-id) that sends all new writes to one shard — a write hotspot. Hash or compose keys to spread load; handle celebrity entities specially. Resharding later is painful, so choose carefully.</div>
+<div class="say"><strong>Say this:</strong> "Sharding splits data by a shard key, and the key is everything: high cardinality, even distribution so no shard is a hotspot, and alignment with the query pattern so most queries hit one shard. The classic mistake is a monotonically increasing key like a timestamp that sends all new writes to one shard. I hash or compose keys to spread load, handle celebrity entities specially, and choose carefully because resharding later is painful."</div>
+`,
+
+"data-sharding-partitioning-replication__partitioning-range-vs-hash-vs-directory-horizontal-vs-vertical": `
+<p class="lead"><strong>Horizontal</strong> partitioning (sharding) splits <em>rows</em> across partitions; <strong>vertical</strong> partitioning splits <em>columns</em> — separating hot columns from large/cold ones.</p>
+<h2>How to assign rows</h2>
+<table>
+<tr><th>Strategy</th><th>Pro</th><th>Con</th></tr>
+<tr><td>Range (by key ranges)</td><td>great for range queries</td><td>hotspots on recent ranges</td></tr>
+<tr><td>Hash (hash the key)</td><td>even distribution</td><td>no range queries; resharding hard</td></tr>
+<tr><td>Directory (lookup service)</td><td>flexible, rebalanceable</td><td>a lookup + SPOF to make HA</td></tr>
+</table>
+<p>Choose by query pattern: range for range scans, hash for even point-lookups.</p>
+<div class="say"><strong>Say this:</strong> "Horizontal partitioning splits rows — that's sharding — while vertical splits columns, separating hot from cold. For assigning rows: range partitioning is great for range queries but can hotspot on recent ranges; hash distributes evenly but kills range queries and makes resharding hard; a directory maps key to partition flexibly and rebalanceably, at the cost of a lookup I must make highly available. I pick by the dominant query pattern."</div>
+`,
+
+"data-sharding-partitioning-replication__replication-leader-follower-synchronous-vs-asynchronous": `
+<p class="lead">In <strong>leader-follower</strong> replication, writes go to the leader, which replicates to followers that serve reads and stand by for failover.</p>
+<ul>
+<li><strong>Synchronous:</strong> the leader waits for a follower to ack before confirming — <em>no data loss</em> on failover, but higher write latency and reduced availability (a down sync follower stalls writes).</li>
+<li><strong>Asynchronous:</strong> the leader confirms immediately and replicates in the background — fast writes, but a failover can <em>lose the last un-replicated writes</em> (an RPO window).</li>
+</ul>
+<p>Many systems use <strong>semi-sync</strong> (at least one synchronous follower) to balance durability against latency.</p>
+<div class="say"><strong>Say this:</strong> "In leader-follower replication, writes go to the leader and replicate to followers that serve reads and can be promoted. Synchronous waits for a follower to ack before confirming, so no data is lost on failover, but writes are slower and availability drops if a sync follower is down. Asynchronous confirms immediately — fast, but a failover can lose the last un-replicated writes. Many systems use semi-sync with at least one synchronous follower to balance durability and latency."</div>
+`,
+
+"data-sharding-partitioning-replication__replication-topologies-single-leader-multi-leader-leaderless": `
+<p class="lead">Three replication topologies, by where writes are accepted.</p>
+<ul>
+<li><strong>Single-leader:</strong> one leader for writes — simple and conflict-free, but a write bottleneck/SPOF needing failover.</li>
+<li><strong>Multi-leader:</strong> several leaders accept writes (e.g. one per region) — better write availability and locality, but concurrent writes to the same data <strong>conflict</strong> and need resolution (last-write-wins, CRDTs, app logic).</li>
+<li><strong>Leaderless (Dynamo/Cassandra):</strong> any replica accepts writes; clients use quorum reads/writes (R+W&gt;N) with version-based conflict resolution — highly available but eventually consistent.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Single-leader has one leader for writes — simple and conflict-free but a bottleneck needing failover. Multi-leader lets several leaders take writes, one per region for locality, but concurrent writes to the same data conflict and need resolution like last-write-wins or CRDTs. Leaderless, as in Dynamo and Cassandra, lets any replica take writes with quorum reads and writes and version-based conflict resolution — highly available but eventually consistent. I choose by write-availability needs versus tolerance for conflicts."</div>
+`,
+
+"data-sharding-partitioning-replication__read-replicas-replication-lag-read-your-writes": `
+<p class="lead">Route reads to replicas to scale read throughput; writes go to the leader. <strong>The catch is replication lag</strong> — a replica is behind the leader, so a read right after a write may not see it (a read-your-writes violation: a user updates their profile then doesn't see the change).</p>
+<h2>How to handle it</h2>
+<ul>
+<li>Read from the <strong>leader</strong> for a user's own recent writes (for N seconds after a write, or within the session).</li>
+<li><strong>Monotonic reads:</strong> stick a user to one replica so they don't see time go backward.</li>
+<li>Accept <strong>bounded staleness</strong> for non-critical reads. Monitor the lag.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I scale reads by routing them to replicas with writes to the leader, but the catch is replication lag — a replica is behind, so a read right after a write may not reflect it, breaking read-your-writes. I read from the leader for a user's own recent writes, stick them to one replica for monotonic reads, and accept bounded staleness elsewhere. And I monitor the lag."</div>
+`,
+
+"data-sharding-partitioning-replication__rebalancing-resharding-with-consistent-hashing": `
+<p class="lead">Adding/removing nodes or a hot shard means moving data (<strong>rebalancing</strong>) without a full remap or downtime. Naive <code>hash % N</code> remaps almost everything; <strong>consistent hashing with virtual nodes</strong> moves only the affected segment (~1/N of keys).</p>
+<p>A common approach: a <strong>fixed number of partitions</strong> (more than nodes) assigned to nodes — rebalancing just reassigns whole partitions and streams their data (Cassandra/Riak style). Rebalance <strong>gradually</strong> (throttle), keep serving during the move (dual read/write), and never move everything at once.</p>
+<div class="say"><strong>Say this:</strong> "Adding or removing nodes shouldn't remap everything. Consistent hashing with virtual nodes moves only the affected segment, about 1/N of keys. A common approach is a fixed number of partitions, more than nodes, so rebalancing just reassigns whole partitions and streams their data. I rebalance gradually with throttling and keep serving during the move with dual read/write, rather than moving everything at once."</div>
+`,
+
+"data-sharding-partitioning-replication__consistency-failover-split-brain-fencing": `
+<p class="lead">On leader failure a follower is promoted — and that's where it gets dangerous.</p>
+<div class="warn"><strong>Split-brain:</strong> a network partition heals and two nodes both acted as leader, each accepting writes → divergent data.</div>
+<h2>How to do failover safely</h2>
+<ul>
+<li><strong>Quorum-based election:</strong> only a majority can elect a leader, so two leaders can't both win.</li>
+<li><strong>Fencing:</strong> the old leader is fenced off — STONITH, or a fencing token the storage/clients check — so its late writes are rejected.</li>
+<li>Because replication is usually async, the new leader may be missing the old one's last writes (the RPO window). Detect <em>real</em> failure (avoid flapping), elect, fence, then redirect clients.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "On leader failure a follower is promoted, and the danger is split-brain — a partition heals and two nodes both acted as leader, diverging data. I prevent it with quorum-based election so only a majority can elect, and fencing so the old leader's late writes are rejected, via STONITH or a fencing token. Because replication is usually async, the new leader may miss the old one's last writes — the RPO window — so failover detects real failure, elects via consensus, fences the old leader, then redirects clients."</div>
+`,
+
+"data-sharding-partitioning-replication__cross-shard-queries-joins-distributed-transactions": `
+<p class="lead">Once data is sharded, anything spanning shards gets hard.</p>
+<ul>
+<li>A query <em>not</em> filtered by the shard key becomes <strong>scatter-gather</strong> — query all shards and merge — which is slow.</li>
+<li><strong>Cross-shard joins and transactions</strong> are expensive and lose atomicity.</li>
+</ul>
+<h2>Mitigations</h2>
+<ul>
+<li>Choose the shard key to match the <strong>dominant query</strong>.</li>
+<li><strong>Co-locate</strong> related entities on the same shard (shard by the same key) so joins/transactions stay local.</li>
+<li>Use a <strong>search index</strong> (Elasticsearch) or async aggregation for cross-cutting queries; use <strong>sagas</strong>, not 2PC, for cross-shard writes.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Once data is sharded, anything spanning shards hurts. A query not filtered by the shard key becomes scatter-gather across all shards, and cross-shard joins and transactions are expensive. So I pick the shard key to match the dominant query, co-locate related entities on the same shard to keep joins and transactions local, and for cross-cutting queries I use a search index or async aggregation. For cross-shard writes I use sagas, not two-phase commit."</div>
+`,
+
+"data-sharding-partitioning-replication__table-partitioning-in-practice-sql-server-postgres": `
+<p class="lead">Within a <em>single</em> database, partition a large table into physical partitions by a key (usually date) while it stays one logical table — distinct from sharding across nodes.</p>
+<ul>
+<li><strong>SQL Server:</strong> a partition function + scheme; <code>SWITCH</code> loads or archives a whole partition instantly.</li>
+<li><strong>Postgres:</strong> declarative partitioning (<code>PARTITION BY RANGE/LIST/HASH</code>); <code>ATTACH</code>/<code>DETACH</code>.</li>
+</ul>
+<p>Benefits: <strong>partition pruning</strong> (scan only relevant partitions), fast bulk load/archive (switch/detach a whole partition vs a row-by-row delete), and per-partition maintenance. Ideal for time-series with a retention policy — detach and drop old partitions.</p>
+<div class="say"><strong>Say this:</strong> "Within one database, partitioning splits a big table into physical partitions by a key, usually date, while it stays one logical table. SQL Server uses a partition function and scheme with instant SWITCH; Postgres has declarative partitioning with ATTACH and DETACH. The wins are partition pruning so queries scan fewer partitions, and archiving by switching or detaching a whole partition instead of a massive delete. It's an in-database feature, distinct from sharding across nodes, and ideal for time-series with retention."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__load-balancer-layer-4-vs-layer-7-algorithms-round-robin-least-conn-has": `
+<p class="lead">A load balancer spreads traffic across backend instances for scale and availability.</p>
+<ul>
+<li><strong>Layer 4 (transport):</strong> routes by IP/port without inspecting content — fast, protocol-agnostic (TCP/UDP), but can't route by URL or header.</li>
+<li><strong>Layer 7 (application):</strong> understands HTTP — routes by path/host/header/cookie, and can terminate TLS, cache, and rewrite — more features, slightly more overhead.</li>
+</ul>
+<p><strong>Algorithms:</strong> round-robin, weighted, least-connections (send to the least busy), consistent/IP hash (sticky by client), least-response-time. Health checks remove unhealthy backends. gRPC/HTTP-2 needs <strong>L7 per-request</strong> balancing.</p>
+<div class="say"><strong>Say this:</strong> "A load balancer spreads traffic across backends for scale and availability. Layer 4 routes by IP and port without inspecting content — fast but can't route by URL. Layer 7 understands HTTP, so it routes by path, host or header and can terminate TLS, cache and rewrite. Algorithms include round-robin, least-connections, and consistent hashing for stickiness. Health checks remove unhealthy backends, and because gRPC pins connections I need L7 per-request balancing."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__reverse-proxy-tls-termination-routing-caching-compression": `
+<p class="lead">A <strong>reverse proxy</strong> sits in front of your servers and handles cross-cutting concerns so the apps don't have to.</p>
+<ul>
+<li><strong>TLS termination</strong> — decrypt HTTPS once; talk plain HTTP or mTLS to backends.</li>
+<li><strong>Routing</strong> — path/host to the right service.</li>
+<li><strong>Caching</strong> — serve cached responses; <strong>compression</strong> (gzip/brotli).</li>
+<li>Load balancing, request buffering, rate limiting, header rewriting, static files.</li>
+</ul>
+<p>Nginx, HAProxy, Envoy, and YARP (.NET) do this — centralizing it so backends stay simple. (The opposite of a <em>forward</em> proxy, which fronts clients.)</p>
+<div class="say"><strong>Say this:</strong> "A reverse proxy sits in front of my servers and handles cross-cutting concerns so the apps don't: TLS termination so HTTPS is decrypted once, routing by path or host, response caching, compression, load balancing and header rewriting. Nginx, HAProxy, Envoy or YARP do this, centralizing it so backends stay simple. It's the opposite of a forward proxy, which fronts clients."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__forward-proxy-vs-reverse-proxy": `
+<p class="lead">Both are proxies, but on opposite sides of the connection.</p>
+<ul>
+<li><strong>Forward proxy</strong> sits in front of <em>clients</em> (outbound) — their gateway to the internet: egress control, caching, anonymity, content filtering, corporate access control. The server never sees the real client.</li>
+<li><strong>Reverse proxy</strong> sits in front of <em>servers</em> (inbound) — the entry point to your services: TLS termination, routing, load balancing, caching. The client never knows which backend served it.</li>
+</ul>
+<p><strong>Mnemonic:</strong> forward proxy is <em>for clients</em>; reverse proxy is <em>for servers</em>.</p>
+<div class="say"><strong>Say this:</strong> "A forward proxy sits in front of clients and is their gateway outbound — for egress control, caching, filtering, anonymity — so the server never sees the real client. A reverse proxy sits in front of servers as the inbound entry point — TLS termination, routing, load balancing, caching — so the client never knows which backend served it. The mnemonic: forward proxy is for clients, reverse proxy is for servers."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__api-gateway-routing-auth-rate-limiting-aggregation": `
+<p class="lead">An <strong>API gateway</strong> is the single entry point for clients to a microservices backend, handling cross-cutting concerns so each service doesn't reimplement them.</p>
+<ul>
+<li><strong>Routing</strong> to the right service.</li>
+<li><strong>Auth</strong> — validate the JWT once, before services.</li>
+<li><strong>Rate limiting / throttling.</strong></li>
+<li><strong>Aggregation</strong> — compose multiple service calls into one response.</li>
+<li>Protocol translation (REST/gRPC), caching, logging/metrics, versioning.</li>
+</ul>
+<p>Azure API Management, Kong, AWS API Gateway, Ocelot, YARP. It simplifies clients and centralizes policy.</p>
+<div class="say"><strong>Say this:</strong> "An API gateway is the single entry point for clients to a microservices backend, handling cross-cutting concerns so each service doesn't: routing to the right service, authentication validating the token once, rate limiting, request aggregation to compose several calls into one response, plus protocol translation, caching and metrics. Azure API Management, Kong or YARP do this — it simplifies clients and centralizes policy at the edge."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__request-routing-tls-termination-at-the-edge": `
+<p class="lead">At the edge (gateway / LB / reverse proxy) you <strong>route</strong> requests to the right backend and <strong>terminate TLS</strong>.</p>
+<p><strong>TLS termination</strong> at the edge decrypts HTTPS there so backends get plain HTTP (or re-encrypt with mTLS inside the mesh) — it centralizes certificates, offloads crypto from apps, and crucially enables L7 routing/inspection (you can't route by path on encrypted traffic).</p>
+<p><strong>Routing rules:</strong> path-based (<code>/api/orders</code> → orders service), host-based, weighted/canary (shift a % to a new version), header-based (A/B).</p>
+<div class="say"><strong>Say this:</strong> "At the edge I route by host, path or header to the right backend and terminate TLS there. Terminating TLS at the edge centralizes certificates, offloads crypto from the apps, and crucially lets the edge do Layer-7 routing and inspection, which it can't on encrypted traffic. I route path- or host-based and do weighted canary routing to shift a percentage to a new version, then re-secure the internal hops with mTLS."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__health-checks-service-discovery": `
+<p class="lead">Two mechanisms that keep traffic flowing to live instances.</p>
+<ul>
+<li><strong>Health checks:</strong> the LB/gateway periodically probes backends (a <code>/health</code> endpoint or TCP check) and removes unhealthy ones from rotation, re-adding them on recovery — so traffic never goes to a dead instance.</li>
+<li><strong>Service discovery:</strong> in dynamic environments (containers, autoscaling) instances come and go with changing IPs, so you can't hardcode addresses. A registry (Consul, etcd, Kubernetes Services/DNS, Eureka) tracks live instances; clients or the LB query it (server-side or client-side discovery).</li>
+</ul>
+<p>Together: discovery <em>finds</em> instances, health checks keep the list <em>live</em>.</p>
+<div class="say"><strong>Say this:</strong> "Health checks are the load balancer probing backends — a /health endpoint — and pulling unhealthy ones from rotation, re-adding on recovery, so traffic never hits a dead instance. Service discovery handles dynamic environments where instances come and go with changing IPs: a registry like Consul, etcd or Kubernetes Services tracks live instances and the LB or clients query it instead of hardcoding addresses. Together, discovery finds instances and health checks keep the list live."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__rate-limiting-authentication-at-the-edge": `
+<p class="lead">Enforce <strong>rate limiting and authentication once at the edge</strong> (gateway) rather than in every service — less duplication, and defense before traffic reaches the backend.</p>
+<ul>
+<li><strong>Auth:</strong> validate the token and reject unauthenticated requests at the gateway (services may still re-check for zero-trust).</li>
+<li><strong>Rate limiting:</strong> throttle per client/API-key/IP to protect the whole backend from abuse/overload, returning <strong>429</strong>.</li>
+</ul>
+<div class="warn"><strong>Caveats:</strong> the edge becomes a critical path (make it HA), and a <em>global</em> limit across gateway instances needs a shared counter.</div>
+<div class="say"><strong>Say this:</strong> "I enforce authentication and rate limiting once at the edge rather than in every service. The gateway validates the token and rejects unauthenticated requests before they reach the backend, and throttles per client or API key to protect everything behind it with a 429. That centralizes policy and offloads the apps. The caveats: the edge is now a critical path so it must be HA, services may still re-check auth for zero-trust, and a global limit needs a shared counter."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__api-gateway-vs-service-mesh-north-south-vs-east-west": `
+<p class="lead">Different traffic, different tools.</p>
+<ul>
+<li><strong>API gateway — north-south:</strong> external clients into the system (ingress) — routing, auth, rate limiting, aggregation at the edge.</li>
+<li><strong>Service mesh — east-west:</strong> service-to-service <em>inside</em> the system — a sidecar proxy (Envoy) next to each service provides mTLS, retries, timeouts, circuit breaking, load balancing and observability, configured centrally (Istio, Linkerd) <strong>without app code changes</strong>.</li>
+</ul>
+<p>They're complementary: gateway at the edge, mesh inside. A mesh costs a sidecar per pod — worth it at scale for uniform security and observability across many services.</p>
+<div class="say"><strong>Say this:</strong> "An API gateway handles north-south traffic — external clients into the system — with routing, auth, rate limiting and aggregation at the edge. A service mesh handles east-west — service-to-service inside — with a sidecar next to each service providing mTLS, retries, timeouts, circuit breaking and observability, configured centrally by Istio or Linkerd without touching app code. They're complementary: gateway at the edge, mesh inside. The mesh costs a sidecar per pod, worth it at scale."</div>
+`,
+
+"load-balancing-reverse-proxy-api-gateway__gateway-risks-spof-latency-god-object-bff-pattern": `
+<p class="lead">An API gateway concentrates traffic and policy, which creates risks.</p>
+<ul>
+<li><strong>Single point of failure</strong> — all traffic flows through it, so it must be highly available (multiple instances).</li>
+<li><strong>Added latency</strong> — an extra hop plus processing.</li>
+<li><strong>"God object"</strong> — business logic and aggregation creep into the gateway, making it a bottleneck and a coupling point every team must coordinate on. Keep it <em>thin</em>: routing, auth, rate limiting — not business logic.</li>
+</ul>
+<h2>BFF — Backend-for-Frontend</h2>
+<p>A dedicated gateway <strong>per client type</strong> (web, mobile, partner) so each gets a tailored API/aggregation without one gateway bloating — reduces the god-object risk and lets teams own their BFF.</p>
+<div class="say"><strong>Say this:</strong> "A gateway's risks are being a single point of failure, so it must be HA; added latency from the extra hop; and becoming a god object as business logic creeps in, making it a bottleneck and a coupling point every team fights over. I keep it thin — routing, auth, rate limiting, not business logic. And I use Backend-for-Frontend — a tailored gateway per client type — so each gets its own API and no single gateway bloats, with teams owning their BFF."</div>
+`,
+
+"system-design-exercises__design-a-url-shortener": `
+<p class="lead"><strong>Requirements:</strong> long URL → short code, redirect, huge read:write ratio, low latency.</p>
+<h2>Design</h2>
+<ul>
+<li><strong>Short code:</strong> base62 of a distributed id (Snowflake/counter) → ~7 chars covers billions; or hash with collision handling. Support custom aliases and expiry.</li>
+<li><strong>Store</strong> the code→URL mapping in a key-value store; <strong>redirect</strong> on GET.</li>
+<li><strong>Read-heavy:</strong> cache hot mappings in Redis, front with a CDN; the write path is light.</li>
+</ul>
+<p><strong>301 vs 302:</strong> 301 is cached by the browser (faster, but loses per-hit analytics); 302 counts every hit.</p>
+<div class="say"><strong>Say this:</strong> "I generate a short code — base62 of a distributed id gives ~7 chars for billions — store the code-to-URL mapping in a key-value store, and redirect on GET. It's massively read-heavy, so I cache hot mappings in Redis with a CDN in front; the write path is light. I'd discuss id generation to avoid collisions, custom aliases and expiry, and 301 versus 302 — 301 is browser-cached so it's faster but loses per-hit analytics."</div>
+`,
+
+"system-design-exercises__design-a-notification-service": `
+<p class="lead"><strong>Requirements:</strong> deliver across channels (push, email, SMS, in-app) at scale, reliably, honoring preferences.</p>
+<h2>Design</h2>
+<p>API → <strong>queue</strong> → channel-specific <strong>workers</strong> → provider adapters (APNs/FCM, SendGrid, Twilio). Add a template service, user preferences/opt-outs, <strong>idempotency</strong> so retries don't double-send, <strong>retries + DLQ</strong> for provider failures, per-user/channel rate limiting, and delivery tracking. The queue absorbs bursts; workers scale per channel.</p>
+<div class="say"><strong>Say this:</strong> "I take requests into a queue, then channel-specific workers call provider adapters for push, email and SMS. I'd add templates, preferences and opt-outs, idempotency so retries don't double-send, retries with a DLQ for provider failures, and per-user rate limiting. The queue absorbs bursts and workers scale per channel. The crux is reliable exactly-once-effect delivery with idempotency keys, provider failover, and honoring preferences."</div>
+`,
+
+"system-design-exercises__design-a-news-feed-timeline": `
+<p class="lead"><strong>Requirements:</strong> show each user a feed of posts from people they follow, at low latency and scale. This is the classic <strong>fan-out</strong> problem.</p>
+<ul>
+<li><strong>Fan-out on write (push):</strong> on post, write into all followers' precomputed feed caches → fast reads, but brutal for celebrities (millions of followers).</li>
+<li><strong>Fan-out on read (pull):</strong> build the feed by querying followees at read time → cheap writes, slower reads.</li>
+<li><strong>Hybrid:</strong> push for normal users, pull for celebrities, merged at read — the standard answer.</li>
+</ul>
+<p>Store feeds in Redis, paginate with keyset, discuss chronological vs ranked ordering.</p>
+<div class="say"><strong>Say this:</strong> "A feed is the fan-out problem. Fan-out on write pushes each post into all followers' precomputed caches — fast reads but brutal for a celebrity with millions of followers. Fan-out on read builds the feed at read time — cheap writes, slower reads. The standard answer is a hybrid: push for normal users, pull for celebrities, merged at read. I'd store feeds in Redis, paginate with keyset, and discuss chronological versus ranked. The celebrity hot-key problem is the crux."</div>
+`,
+
+"system-design-exercises__design-a-chat-messaging-system": `
+<p class="lead"><strong>Requirements:</strong> 1:1 and group messaging, real-time delivery, presence, history, receipts, at scale.</p>
+<h2>Design</h2>
+<p>Persistent <strong>WebSocket</strong> connections to chat servers. A message goes client → server → <strong>stored</strong> (Cassandra, partitioned by conversation) → delivered to the recipient's live connection, or queued and push-notified if offline. Needs a <strong>session registry</strong> (which server holds which user's socket), a presence service, per-conversation ordering with sequence numbers, and at-least-once delivery with dedup.</p>
+<div class="say"><strong>Say this:</strong> "Chat uses persistent WebSocket connections. A message goes client to server, gets stored — Cassandra partitioned by conversation handles the write volume — and is delivered to the recipient's live connection, or queued and push-notified if offline. I need a session registry mapping users to the server holding their socket, a presence service, per-conversation ordering with sequence numbers, and at-least-once delivery with dedup. The crux at scale is routing a message to the right server among millions of connections."</div>
+`,
+
+"system-design-exercises__design-a-distributed-job-task-scheduler": `
+<p class="lead"><strong>Requirements:</strong> schedule one-off and recurring jobs, run them reliably, with retries, at scale.</p>
+<h2>Design</h2>
+<p>A <strong>job store</strong> with next-run times; a scheduler polls for due jobs and <strong>enqueues</strong> them; <strong>workers</strong> pull and execute (competing consumers). Claim each job atomically (<code>SELECT FOR UPDATE SKIP LOCKED</code> or a lease) so two workers don't run it; make execution <strong>idempotent</strong>; use retries with backoff + DLQ and a <strong>visibility timeout</strong> so a crashed worker's job is retried. Recurring jobs compute their next run on completion.</p>
+<div class="say"><strong>Say this:</strong> "A scheduler keeps jobs with next-run times; it polls for due jobs and enqueues them, and workers pull and execute as competing consumers. For reliability I claim each job atomically with SKIP LOCKED or a lease, make execution idempotent since delivery is at-least-once, and use retries with backoff, a DLQ, and a visibility timeout so a crashed worker's job is retried. Recurring jobs compute their next run on completion. The crux is exactly-once execution via atomic claim plus idempotency."</div>
+`,
+
+"system-design-exercises__design-a-distributed-cache-redis-memcached": `
+<p class="lead"><strong>Requirements:</strong> fast key-value get/set, high throughput, scale beyond one node, survive failures.</p>
+<h2>Design</h2>
+<p>In-memory hash table; <strong>shard keys across nodes with consistent hashing</strong> so adding/removing a node moves only ~1/N of keys; <strong>replicate</strong> (primary + replicas) for availability; an <strong>LRU/LFU eviction</strong> policy plus TTLs. Routing is client-side or via a proxy. It's best-effort — invalidate on write — and on a node failure its keys miss to the DB or come from a replica. Hot keys get replicated or locally cached.</p>
+<div class="say"><strong>Say this:</strong> "A distributed cache is an in-memory key-value store sharded with consistent hashing so a node change only moves about 1/N of keys, replicated for availability, with LRU or LFU eviction and TTLs. Routing is client-side or proxy-based. It's best-effort — invalidate on write — and on failure a node's keys miss to the database or come from a replica. Hot keys get replicated or locally cached. The crux is consistent hashing for distribution and rebalancing, plus replication and eviction."</div>
+`,
+
+"system-design-exercises__design-a-key-value-store-dynamo-cassandra": `
+<p class="lead"><strong>Requirements:</strong> a highly available, scalable, partition-tolerant (AP) key-value store.</p>
+<h2>Dynamo techniques</h2>
+<ul>
+<li><strong>Consistent hashing</strong> (with virtual nodes) to partition; <strong>replicate</strong> to N nodes.</li>
+<li><strong>Tunable consistency</strong> via quorums (R + W greater than N for strong reads).</li>
+<li><strong>Leaderless</strong> — any replica takes writes; conflicts resolved by <strong>versioning</strong> (vector clocks) / last-write-wins.</li>
+<li><strong>Hinted handoff</strong> for down nodes; <strong>anti-entropy</strong> (Merkle trees) to repair; <strong>gossip</strong> for membership.</li>
+</ul>
+<p>Always accepts writes; reads may be stale. Cassandra adds a wide-column model on LSM-tree storage.</p>
+<div class="say"><strong>Say this:</strong> "A Dynamo-style store is built for availability and partition tolerance. It partitions with consistent hashing and virtual nodes, replicates to N nodes, and tunes consistency via quorums — R plus W greater than N for strong reads. It's leaderless with versioned conflict resolution like vector clocks, hinted handoff for down nodes, anti-entropy with Merkle trees, and gossip for membership. It always accepts writes and reads may be stale. Cassandra adds a wide-column model on LSM storage. The crux is AP with eventual consistency and tunable quorums."</div>
+`,
+
+"system-design-exercises__design-a-typeahead-autocomplete": `
+<p class="lead"><strong>Requirements:</strong> suggest completions as the user types, at sub-&lt;100ms latency, ranked by popularity, at scale.</p>
+<h2>Design</h2>
+<p>A <strong>trie</strong> of terms with popularity scores; <strong>precompute the top-k completions at each prefix node</strong> so a lookup is just traversing to the node and returning the cached list — no subtree scan. Serve from memory, shard the trie by prefix, cache hot prefixes, and have the client <strong>debounce</strong> keystrokes. Popularity updates come from query logs rebuilt periodically (they change slowly).</p>
+<div class="say"><strong>Say this:</strong> "Autocomplete needs sub-100ms ranked suggestions. I use a trie with popularity scores and precompute the top-k at each prefix node, so a lookup just traverses to the node and returns the cached list rather than scanning the subtree. I serve it from memory, shard the trie by prefix, cache hot prefixes, and debounce on the client. Popularity comes from query logs rebuilt periodically. The crux is precomputed top-k per prefix for latency plus updating counts from the query firehose."</div>
+`,
+
+"system-design-exercises__design-a-metrics-monitoring-alerting-system": `
+<p class="lead"><strong>Requirements:</strong> ingest high-volume metrics, store time-series efficiently, query/dashboard, and alert.</p>
+<h2>Design</h2>
+<p>Pull (Prometheus scrapes <code>/metrics</code>) or push → ingestion (buffered/sharded, maybe a Kafka buffer) → a <strong>time-series DB</strong> optimized for appends + time-range queries, with <strong>downsampling/rollups</strong> and retention → query engine → dashboards (Grafana) + an <strong>alert manager</strong> (evaluate rules, dedup, group, route, silence).</p>
+<div class="warn"><strong>The enemy is cardinality</strong> — too many label values explode the series count. Bound labels, shard by metric, downsample old data.</div>
+<div class="say"><strong>Say this:</strong> "A metrics system ingests high-volume time-series — pull like Prometheus scraping /metrics, or push — into a time-series database optimized for appends and time-range queries with downsampling and retention, feeding dashboards and an alert manager that evaluates rules and dedups, groups and routes. The enemy is cardinality: too many label values explode the series, so I bound labels and shard by metric. The crux is high write throughput with efficient time-range reads and cardinality control, alerting on symptoms not causes."</div>
+`,
+
+"system-design-exercises__design-a-feature-flag-service": `
+<p class="lead"><strong>Requirements:</strong> toggle features at runtime without deploy, target by user/segment/%, low-latency evaluation, consistent across instances.</p>
+<h2>Design</h2>
+<p>A <strong>flag store</strong> (flag → rules: on/off, % rollout, targeting) edited via UI/API; <strong>SDKs</strong> in each app fetch and cache the rules and <strong>evaluate locally</strong> (in-process, no network per check). Changes propagate in seconds via streaming/polling. Percentage rollouts use <strong>deterministic bucketing</strong> (hash of userId+flag mod 100) so a user stays in the same bucket.</p>
+<div class="warn">A bad flag is a config change that can hit everyone — add audit, guardrails, and gradual rollout.</div>
+<div class="say"><strong>Say this:</strong> "A feature-flag service stores flags with rules edited via a UI, and SDKs in each app fetch and cache them and evaluate in-process, so a check is local with no network call; changes propagate in seconds via streaming or polling. Percentage rollouts use deterministic bucketing — hash of user plus flag mod 100 — so a user stays in the same bucket. Reads dominate and the config is tiny. The crux is local evaluation for latency plus fast propagation and deterministic targeting, with audit and guardrails since a bad flag can hit everyone."</div>
+`,
+
+"system-design-exercises__design-a-payment-order-flow-with-exactly-once-effects": `
+<p class="lead"><strong>Requirements:</strong> process an order and charge payment reliably — never double-charge — with consistent state through failures.</p>
+<h2>Design</h2>
+<ul>
+<li><strong>Idempotency key</strong> (client-generated) — the server dedups, so a retry returns the same result, never a second charge; pass the key to the payment <strong>provider</strong>, which dedups too.</li>
+<li><strong>Order state machine</strong> (created → paid → fulfilled).</li>
+<li><strong>Dual-write</strong> (charge card + update DB) handled by the <strong>outbox</strong>; multi-step flows (reserve → charge → ship) use a <strong>saga</strong> with compensation (refund on failure).</li>
+<li>A <strong>reconciliation</strong> job resolves uncertain states.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "The whole game is exactly-once effects. The client sends an idempotency key, the server dedups on it so a retry never double-charges, and I pass that key to the payment provider which dedups too. I model the order as a state machine and handle the dual-write — charge plus DB — with the outbox so the payment is driven from a durable record, and a saga with compensation for multi-step flows, refunding if a later step fails. At-least-once plus idempotency everywhere gives exactly-once effect, with a reconciliation job for uncertain states."</div>
+`,
+
+"system-design-exercises__design-a-campaign-workflow-engine-marketing-automation": `
+<p class="lead"><strong>Requirements:</strong> define multi-step campaigns (triggers → actions → waits → branches) that run for millions of recipients over time, reliably, multi-tenant. This design ties together Redis, a message queue, scheduling, idempotency, and multi-tenancy.</p>
+<h2>Design</h2>
+<ul>
+<li>A workflow <strong>definition</strong> — a state machine/DAG of steps (send email, wait N days, branch on behavior, update a field).</li>
+<li>An <strong>execution engine</strong> that advances each recipient's instance through the steps — <strong>durable and resumable</strong>, like a saga/state machine <em>per recipient</em> that survives restarts.</li>
+<li>Per-recipient <strong>state</strong> in a DB; a <strong>scheduler</strong> fires time-based waits (job scheduler); <strong>action workers</strong> execute via a queue → providers; <strong>events</strong> (opened, clicked) feed back to advance branches.</li>
+<li><strong>Idempotency</strong> (never email twice), exactly-once effects, and <strong>multi-tenant isolation</strong>; partition by recipient/tenant at scale.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "A campaign engine runs a multi-step state machine per recipient — triggers, send actions, timed waits, and branches on behavior. I store each recipient's instance state durably, use a job scheduler for the timed waits, execute actions through a queue to providers, and feed events like opens and clicks back to advance branches. It has to be durable and resumable — a saga per recipient that survives restarts — idempotent so no one is emailed twice, and multi-tenant with isolation, partitioned by recipient and tenant at scale. It ties together durable state, a queue for actions, scheduling, idempotency and multi-tenancy — the crux is a resumable per-recipient state machine with exactly-once actions."</div>
+`,
 };
