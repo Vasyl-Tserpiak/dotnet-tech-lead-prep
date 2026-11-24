@@ -41,6 +41,8 @@
   .tag{font-size:11px;color:var(--muted);background:#f0f2f5;border:1px solid var(--line);border-radius:5px;padding:2px 7px}
   .tag.gap{color:var(--gap);background:var(--gapbg);border-color:#e6d6f3}
   h1.title{font-size:25px;line-height:1.25;margin:4px 0 6px}
+  .edition{display:flex;align-items:center;gap:8px;margin:12px 0;color:var(--muted);font-size:14px}
+  .edition select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
 
   .article{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 26px 24px;box-shadow:0 1px 2px rgba(20,30,45,.05),0 2px 10px rgba(20,30,45,.05)}
   .article h2{font-size:17px;margin:24px 0 8px;padding-top:10px;border-top:1px solid var(--line)}
@@ -92,6 +94,7 @@
 
 <script src="tracker-data.js"></script>
 <script src="explanations-data.js"></script>
+<script src="astra-explanations.js"></script>
 <script>
   const EXP = window.EXPLANATIONS || {};
   const DATA = window.TRACKER_DATA || [];
@@ -137,6 +140,10 @@
     const ref = it.g ? '<span class="tag gap">&#9733; not in your deck yet</span>'
                      : (it.c ? '<span class="tag">deck card #'+it.c+'</span>' : '');
     const area='<span class="tag">'+esc(dom.name)+'</span>';
+    const alternative = window.ASTRA_EXPLANATIONS?.[id];
+    const editionControl = EXP[id] && alternative
+      ? '<label class="edition">Explanation <select id="edition"><option value="opus">Opus 4.8</option><option value="astra">Astra Medium</option></select></label>'
+      : '';
 
     let bodyHtml;
     if(EXP[id]){
@@ -159,7 +166,34 @@
 
     main.innerHTML='<div class="meta">'+pr+ref+area+'</div>'+
       '<h1 class="title">'+esc(it.t)+'</h1>'+
-      '<div class="article">'+bodyHtml+'</div>'+pager;
+      editionControl+'<div class="article" id="article">'+bodyHtml+'</div>'+pager;
+
+    if (editionControl) {
+      const picker = document.getElementById("edition");
+      const article = document.getElementById("article");
+      const preferenceKey = "tech-lead-prep.explanation-edition";
+      function renderEdition() {
+        if (picker.value === "opus") {
+          article.innerHTML = EXP[id];
+          return;
+        }
+        const paragraphs = alternative.map((text, index) => {
+          const paragraph = document.createElement("p");
+          if (index === 0) paragraph.className = "lead";
+          paragraph.textContent = text;
+          return paragraph;
+        });
+        article.replaceChildren(...paragraphs);
+      }
+      try {
+        if (localStorage.getItem(preferenceKey) === "astra") picker.value = "astra";
+      } catch { /* Storage may be unavailable when reading offline. */ }
+      if (picker.value === "astra") renderEdition();
+      picker.addEventListener("change", () => {
+        renderEdition();
+        try { localStorage.setItem(preferenceKey, picker.value); } catch { /* Current-page selection still works. */ }
+      });
+    }
   }
 </script>
 </body>

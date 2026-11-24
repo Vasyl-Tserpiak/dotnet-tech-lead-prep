@@ -4061,4 +4061,131 @@ FROM orders ORDER BY customer_id, created_at DESC;   -- latest order per custome
 </ul>
 <div class="say"><strong>Say this:</strong> "Most of an app is third-party dependencies, which carry known vulnerabilities and are a supply-chain surface. I run software composition analysis — Dependabot or Snyk — to scan for CVEs, fail the build on criticals, and auto-update, and I pin versions with lock files. I generate an SBOM — a bill of materials of every component and version — so when something like Log4Shell drops I instantly know if I'm affected. And I sign artifacts, verify signatures, and lock down the build pipeline — shifting security left into CI."</div>
 `,
+
+"oop-solid-design-patterns__solid-kiss-dry-and-when-to-break-them": `
+<p class="lead"><strong>SOLID</strong> drives low coupling and easy change; <strong>KISS</strong> keeps it simple; <strong>DRY</strong> means one source of truth per piece of knowledge. They're <em>heuristics</em>, not laws.</p>
+<h2>When to break them</h2>
+<ul>
+<li><strong>Over-DRY:</strong> unifying two things that merely <em>look</em> alike but represent different concepts creates the wrong abstraction and couples them — "duplication is cheaper than the wrong abstraction" (Sandi Metz). Prefer accidental duplication until the real shared concept is clear.</li>
+<li><strong>Over-SOLID:</strong> interfaces and layers for a single implementation is over-engineering — KISS/YAGNI pull back.</li>
+</ul>
+<p>Apply principles to reduce <em>real</em> pain, not dogmatically.</p>
+<div class="say"><strong>Say this:</strong> "SOLID drives low coupling and easy change, KISS keeps it simple, DRY means one source of truth per piece of knowledge — but they're heuristics, not laws. The classic over-DRY mistake is unifying two things that merely look alike but represent different concepts; that's the wrong abstraction, and duplication is cheaper than the wrong abstraction. Over-applied SOLID becomes over-engineering, where KISS and YAGNI pull back. I apply them to reduce real pain, not dogmatically."</div>
+`,
+
+"oop-solid-design-patterns__clean-hexagonal-architecture-the-dependency-rule": `
+<p class="lead">Clean and Hexagonal architecture both enforce the <strong>dependency rule</strong>: dependencies point <em>inward</em>, toward the domain, which depends on nothing.</p>
+<ul>
+<li><strong>Layers:</strong> Domain (entities, rules) at the center → Application (use cases) → Interface adapters → Infrastructure (DB, web, external) at the edge.</li>
+<li><strong>Hexagonal (ports &amp; adapters):</strong> the domain defines <em>ports</em> (interfaces); <em>adapters</em> (DB, UI, APIs) implement them.</li>
+<li><strong>Dependency inversion</strong> makes it work: the inner layer declares the interface, the outer implements it.</li>
+</ul>
+<p>Gives a testable, framework-independent core — at the cost of more layers and mapping. Worth it for complex, long-lived domains; overkill for simple CRUD.</p>
+<div class="say"><strong>Say this:</strong> "Clean and Hexagonal both enforce the dependency rule — dependencies point inward toward the domain, which depends on nothing. The domain and use cases sit at the center; the database, web and external services are adapters at the edge implementing ports the domain defines. Dependency inversion makes it work: the inner layer declares the interface, the outer implements it. That gives a testable, framework-independent core, at the cost of more layers and mapping — worth it for complex domains, overkill for simple CRUD."</div>
+`,
+
+"oop-solid-design-patterns__ddd-building-blocks-you-should-name": `
+<p class="lead">The DDD <strong>tactical</strong> building blocks to name:</p>
+<ul>
+<li><strong>Entity:</strong> identity + lifecycle (an Order).</li>
+<li><strong>Value Object:</strong> defined by its values, immutable, no identity (Money, Address).</li>
+<li><strong>Aggregate:</strong> a cluster of entities/VOs with a <em>root</em> that enforces invariants and is the only entry point — a consistency and transaction boundary.</li>
+<li><strong>Repository:</strong> persistence abstraction per aggregate root.</li>
+<li><strong>Domain Service:</strong> logic that doesn't fit one entity.</li>
+<li><strong>Domain Event:</strong> something meaningful happened.</li>
+</ul>
+<p><strong>Strategic:</strong> Bounded Context (a model's boundary), Ubiquitous Language (shared vocabulary). The aggregate is the central concept.</p>
+<div class="say"><strong>Say this:</strong> "The DDD building blocks: entities have identity and a lifecycle; value objects are immutable and defined by their values, like Money; an aggregate is a cluster with a root that enforces invariants and is the only entry point — the consistency and transaction boundary; repositories persist aggregate roots; domain services hold logic that doesn't belong to one entity; and domain events record that something happened. Strategically, bounded contexts bound a model and the ubiquitous language is the shared vocabulary. The aggregate is central."</div>
+`,
+
+"oop-solid-design-patterns__ddd-depth-aggregates-bounded-contexts-domain-events-ubiquitous-languag": `
+<p class="lead">Deeper on the four key DDD concepts.</p>
+<ul>
+<li><strong>Aggregate = consistency boundary:</strong> enforce all its invariants in <em>one transaction</em>; reference other aggregates by <strong>id</strong>, not object reference; keep aggregates small (ideally one aggregate per transaction).</li>
+<li><strong>Bounded Context:</strong> the boundary where a model and its language are consistent. "Customer" means different things in sales vs billing, so each gets its own model, integrated via <strong>context mapping</strong> (anti-corruption layer, shared kernel). Often maps to a service boundary.</li>
+<li><strong>Domain Events:</strong> capture occurrences (OrderPlaced) to decouple side effects and drive eventual consistency across aggregates/contexts.</li>
+<li><strong>Ubiquitous Language:</strong> a shared, precise vocabulary between devs and domain experts, reflected in the code.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "An aggregate is a consistency boundary — I enforce its invariants in one transaction and reference other aggregates by id, keeping aggregates small. A bounded context bounds where a model and its language are consistent — 'Customer' differs in sales versus billing — so each gets its own model, integrated via context mapping like an anti-corruption layer, often a service boundary. Domain events capture occurrences like OrderPlaced to decouple side effects and drive eventual consistency. The ubiquitous language is the shared vocabulary reflected in the code."</div>
+`,
+
+"oop-solid-design-patterns__repository-unit-of-work-with-ef-still-needed": `
+<p class="lead">EF Core's <code>DbContext</code> <em>is already</em> a Unit of Work (tracks changes, <code>SaveChanges</code> = one transaction), and <code>DbSet&lt;T&gt;</code> <em>is already</em> a repository (a queryable collection).</p>
+<div class="warn">So wrapping EF in your own generic <code>Repository&lt;T&gt;</code> + <code>UnitOfWork</code> is usually <strong>redundant and leaky</strong> — it hides EF's strengths (Include, projections, async) behind a worse abstraction.</div>
+<p>Add a repository only for <strong>persistence ignorance</strong> in a Clean-architecture domain — and then a <em>specific</em> repository that returns domain objects and encapsulates meaningful queries, not a generic CRUD wrapper. By default, just use the <code>DbContext</code>.</p>
+<div class="say"><strong>Say this:</strong> "EF Core's DbContext is already a Unit of Work and DbSet is already a repository, so wrapping it in a generic Repository plus UnitOfWork is usually redundant and leaky — it hides EF's strengths like Include and projections behind a worse abstraction. I'd add a repository only for persistence ignorance in a Clean-architecture domain, and then a specific repository that returns domain objects and encapsulates meaningful queries, not a generic CRUD wrapper. By default I just use the DbContext."</div>
+`,
+
+"oop-solid-design-patterns__strategy-factory-decorator-observer-net-examples": `
+<p class="lead">Four common GoF patterns, each mapping to an idiomatic .NET construct.</p>
+<ul>
+<li><strong>Strategy:</strong> interchangeable algorithms behind an interface you inject — <code>IComparer</code>, or an <code>IDiscount</code> with implementations (replaces a switch; drives Open/Closed).</li>
+<li><strong>Factory:</strong> encapsulate creation — Factory Method, or a DI factory delegate <code>Func&lt;T&gt;</code> / <code>IHttpClientFactory</code>.</li>
+<li><strong>Decorator:</strong> wrap an object to add behavior transparently through the same interface — a caching/logging decorator around a service, or <code>BufferedStream</code> wrapping a <code>FileStream</code>.</li>
+<li><strong>Observer:</strong> publish-subscribe on state changes — C# <code>events</code> or <code>IObservable&lt;T&gt;</code> (Rx).</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Strategy encapsulates interchangeable algorithms behind an interface you inject — IComparer or an IDiscount — replacing a switch and driving Open/Closed. Factory encapsulates creation — a Factory Method or a DI factory delegate like Func&lt;T&gt; or IHttpClientFactory. Decorator wraps an object to add behavior through the same interface — a caching or logging decorator, or BufferedStream wrapping a FileStream. Observer is publish-subscribe on state changes — C# events or IObservable with Rx."</div>
+`,
+
+"oop-solid-design-patterns__gof-patterns-beyond-those-creational-structural-behavioral": `
+<p class="lead">The Gang of Four's 23 patterns in three families — know the <em>intent</em>, not rote.</p>
+<ul>
+<li><strong>Creational</strong> (object creation): Singleton, Factory Method, Abstract Factory, Builder, Prototype.</li>
+<li><strong>Structural</strong> (composing objects): Adapter (incompatible interfaces), Facade (simplify a subsystem), Proxy (control access), Composite (part-whole trees), Bridge, Flyweight.</li>
+<li><strong>Behavioral</strong> (interaction): Strategy, Observer, Command (encapsulate a request — undo/queue), Chain of Responsibility (handlers in a chain — like middleware), State, Template Method, Iterator, Mediator, Visitor.</li>
+</ul>
+<p>Many are baked into .NET: Iterator = <code>IEnumerable</code>, Observer = events, Command = a delegate.</p>
+<div class="say"><strong>Say this:</strong> "The 23 GoF patterns split into creational — Singleton, Factory, Builder; structural — Adapter for incompatible interfaces, Facade to simplify a subsystem, Proxy to control access, Composite for trees; and behavioral — Strategy, Observer, Command for undo or queueing, Chain of Responsibility like middleware, State, Iterator, Mediator. Many are baked into .NET — Iterator is IEnumerable, Observer is events, Command is a delegate. I focus on intent and only reach for one when it solves a real problem."</div>
+`,
+
+"oop-solid-design-patterns__mediator-mediatr-in-process-cqrs": `
+<p class="lead">The <strong>Mediator</strong> pattern decouples components by routing their communication through a mediator rather than direct calls. <strong>MediatR</strong> is the popular .NET library.</p>
+<ul>
+<li>A controller <strong>sends</strong> a command or query; a <strong>single handler</strong> handles it — giving in-process <strong>CQRS</strong> (separate read and write handlers) and thin controllers.</li>
+<li><strong>Pipeline behaviors</strong> wrap handlers for cross-cutting concerns (validation, logging, transactions) — like middleware.</li>
+</ul>
+<div class="warn"><strong>Criticism:</strong> indirection/"magic" that's hard to navigate, and overkill for simple apps. Use it for medium-and-up apps wanting clean separation.</div>
+<div class="say"><strong>Say this:</strong> "Mediator decouples components by routing their communication through a mediator rather than direct calls. MediatR is the .NET library: a controller sends a command or query and a single handler handles it, giving in-process CQRS with separate read and write handlers and thin controllers. Pipeline behaviors wrap handlers for cross-cutting concerns like validation and transactions, like middleware. The criticism is indirection that's hard to navigate, so I use it for medium-and-up apps and skip it for simple CRUD."</div>
+`,
+
+"oop-solid-design-patterns__di-done-right-the-service-locator-anti-pattern": `
+<p class="lead"><strong>DI done right = constructor injection:</strong> a class declares its dependencies as constructor parameters (interfaces), and the container supplies them — so dependencies are <em>explicit</em>, the class is honest about what it needs, and it's testable with mocks.</p>
+<div class="warn"><strong>The service-locator anti-pattern:</strong> the class asks a container for its dependencies at runtime (<code>provider.GetService&lt;T&gt;()</code>). That hides dependencies (the constructor lies), couples to the container, and defers failures to runtime.</div>
+<p>Keep the container at the <strong>composition root</strong> where the object graph is wired; never inject <code>IServiceProvider</code> into business classes.</p>
+<div class="say"><strong>Say this:</strong> "DI done right is constructor injection — a class declares its dependencies as constructor parameters and the container supplies them, so dependencies are explicit, the class is honest, and it's easy to test with mocks. The service-locator anti-pattern has the class ask a container for its dependencies at runtime, which hides them, couples to the container, and defers failures to runtime. I keep the container at the composition root and never inject IServiceProvider into business classes."</div>
+`,
+
+"oop-solid-design-patterns__composition-over-inheritance": `
+<p class="lead">Prefer building behavior by <strong>composing</strong> objects (has-a) over <strong>inheriting</strong> from a base class (is-a).</p>
+<h2>Why</h2>
+<ul>
+<li>Inheritance couples subclasses tightly to a <strong>fragile base</strong> — a base change breaks subclasses.</li>
+<li>The hierarchy is rigid and fixed at compile time; deep hierarchies are hard to follow; it's easy to violate Liskov with a subclass that doesn't truly substitute.</li>
+<li>Composition injects collaborators/strategies, so you combine small focused pieces and vary behavior at runtime.</li>
+</ul>
+<p>Use inheritance only for a genuine is-a with a stable base and real substitutability; use composition for reuse and flexibility — most of the time.</p>
+<div class="say"><strong>Say this:</strong> "I prefer composition — combining objects — over inheritance. Inheritance couples subclasses to a fragile base, the hierarchy is rigid and fixed at compile time, and it's easy to violate Liskov with a subclass that doesn't really substitute. Composition injects collaborators and strategies, so I combine small focused pieces and vary behavior at runtime. I use inheritance only for a genuine is-a with a stable base and real substitutability, and composition for reuse and flexibility — which is most of the time."</div>
+`,
+
+"oop-solid-design-patterns__anti-corruption-layer-null-object-result-option": `
+<p class="lead">Three useful patterns.</p>
+<ul>
+<li><strong>Anti-corruption layer:</strong> a translation layer between your clean domain and an external/legacy system, so their model and quirks don't leak into yours — you translate at the boundary (DDD context mapping).</li>
+<li><strong>Null Object:</strong> return a do-nothing object implementing the interface with neutral behavior instead of <code>null</code> — callers don't null-check and don't risk an NRE.</li>
+<li><strong>Result / Option:</strong> return a <code>Result&lt;T&gt;</code> (success/failure + error) or <code>Option&lt;T&gt;</code> (some/none) instead of throwing for <em>expected</em> failures or returning null — making the outcome explicit in the type and forcing the caller to handle it.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "An anti-corruption layer translates between my clean domain and an external or legacy system, so their quirks don't leak into mine. The Null Object pattern returns a do-nothing object implementing the interface instead of null, so callers don't null-check or risk an NRE. A Result or Option type returns success-or-failure, or some-or-none, instead of throwing for expected failures or returning null — making the outcome explicit in the type and forcing the caller to handle it, avoiding exceptions as control flow."</div>
+`,
+
+"oop-solid-design-patterns__when-you-should-not-apply-a-pattern-overengineering": `
+<p class="lead">A pattern solves a <em>specific</em> problem, so applying one without that problem just adds complexity — <strong>over-engineering</strong>.</p>
+<h2>Don't apply a pattern when</h2>
+<ul>
+<li>There's no real variation to protect against (a Strategy/Factory for a single implementation — YAGNI).</li>
+<li>It's a simple CRUD app that doesn't need Clean architecture, CQRS, or repositories.</li>
+<li>You're adding it because it's "best practice" rather than to solve pain.</li>
+</ul>
+<p><strong>Smells:</strong> interfaces with one implementation, pass-through layers, premature generalization, pattern soup. Introduce a pattern when the pain is <strong>real and repeated</strong> (rule of three); keep KISS/YAGNI as the default.</p>
+<div class="say"><strong>Say this:</strong> "A pattern solves a specific problem, so applying one without that problem just adds complexity — over-engineering. I don't reach for a Strategy or Factory with a single implementation, I don't put Clean architecture or CQRS on a simple CRUD app, and I don't add a pattern because it's 'best practice' rather than to solve pain. The smells are interfaces with one implementation, pass-through layers, and premature generalization. I introduce a pattern when the pain is real and repeated — the rule of three — and keep KISS and YAGNI as the default."</div>
+`,
 };
