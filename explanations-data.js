@@ -4911,4 +4911,121 @@ RUN dotnet publish ...</code></pre>
 <div class="warn"><strong>Blameless:</strong> focus on systems and processes, not individuals — people act reasonably on the information they had. Fix the missing guardrail or alerting gap, not the person; blame hides the truth.</div>
 <div class="say"><strong>Say this:</strong> "During an incident I declare it with a severity and assign roles — an incident commander to coordinate, a comms lead, and responders — establish a channel, update stakeholders, and mitigate first to restore service by rolling back or failing over, before chasing root cause. Afterward I run a blameless postmortem: a timeline, the impact, the root cause via the 5 Whys, what went well and poorly, and action items with owners. Blameless means I fix the system — the missing guardrail or alerting gap — not the person, because people act reasonably on the information they had, and blame just hides the truth."</div>
 `,
+
+"frontend-javascript-typescript-angular__the-js-event-loop-microtasks-vs-macrotasks": `
+<p class="lead">JavaScript is single-threaded with an <strong>event loop</strong> over two queues.</p>
+<ul>
+<li><strong>Macrotasks:</strong> <code>setTimeout</code>, <code>setInterval</code>, I/O, UI events.</li>
+<li><strong>Microtasks:</strong> Promise callbacks (<code>.then</code>), <code>queueMicrotask</code>, <code>async</code>/<code>await</code> continuations.</li>
+</ul>
+<p>The loop: run one macrotask → <strong>drain the entire microtask queue</strong> → render → next macrotask. So a Promise resolves before a <code>setTimeout(0)</code>, and awaited code resumes as a microtask.</p>
+<div class="warn">A flood of microtasks can <strong>starve rendering and macrotasks</strong>.</div>
+<div class="say"><strong>Say this:</strong> "JavaScript is single-threaded with an event loop over two queues: macrotasks like setTimeout and UI events, and microtasks like Promise callbacks and async/await continuations. The loop runs one macrotask, then drains the entire microtask queue, then renders, then the next macrotask — so a Promise resolves before a setTimeout zero, and awaited code resumes as a microtask. The catch is a flood of microtasks can starve rendering. So the order is sync code, then all microtasks, then the next macrotask."</div>
+`,
+
+"frontend-javascript-typescript-angular__promise-all-vs-allsettled-vs-race-vs-any": `
+<p class="lead">Four Promise combinators for concurrent promises — pick by what you need.</p>
+<table>
+<tr><th>Combinator</th><th>Settles when</th><th>Use for</th></tr>
+<tr><td><code>Promise.all</code></td><td>all resolve; rejects <em>fast</em> on first failure</td><td>need all to succeed</td></tr>
+<tr><td><code>Promise.allSettled</code></td><td>all settle (never rejects); returns each outcome</td><td>want every result regardless of failures</td></tr>
+<tr><td><code>Promise.race</code></td><td>the first to settle (resolve or reject)</td><td>timeouts</td></tr>
+<tr><td><code>Promise.any</code></td><td>first <em>fulfilled</em>; rejects only if all fail</td><td>first-success-wins (fallbacks)</td></tr>
+</table>
+<div class="say"><strong>Say this:</strong> "Promise.all resolves when all resolve but rejects fast on the first failure — for when I need everything to succeed. allSettled waits for all to settle and never rejects, returning each outcome — for every result regardless of failures. race settles on the first to settle, resolve or reject — good for timeouts. any resolves with the first fulfilled one and rejects only if all fail — for first-success-wins fallbacks. So: need all, need all outcomes, first to settle, or first to succeed."</div>
+`,
+
+"frontend-javascript-typescript-angular__closures-how-this-is-bound": `
+<p class="lead">A <strong>closure</strong> is a function that captures variables from its enclosing (lexical) scope and keeps access to them even after the outer function returned — it powers private state, callbacks, and the loop-variable gotcha (<code>var</code> shares one binding; <code>let</code> is per-iteration).</p>
+<h2>How <code>this</code> is bound</h2>
+<p>A regular function's <code>this</code> is <strong>dynamic</strong> — set by the <em>call site</em>: the object for a method call, the new instance with <code>new</code>, <code>undefined</code> (strict) for a plain call, or whatever you <code>bind</code>/<code>call</code>/<code>apply</code>. <strong>Arrow functions have no own <code>this</code></strong> — they capture it lexically, which is why arrows preserve <code>this</code> in callbacks.</p>
+<div class="say"><strong>Say this:</strong> "A closure is a function that captures variables from its enclosing scope and keeps access after the outer function returns — it powers private state and callbacks, and it's behind the loop-variable gotcha where var shares one binding and let is per-iteration. For this, a regular function's this is dynamic, set by the call site; arrow functions have no own this and capture it lexically, which is why I use arrows for callbacks to preserve this. The classic bug is passing a method as a callback and losing this."</div>
+`,
+
+"frontend-javascript-typescript-angular__var-vs-let-vs-const-hoisting-the-tdz": `
+<p class="lead">Three declarations plus the hoisting rules.</p>
+<ul>
+<li><strong>var:</strong> function-scoped, hoisted (initialized to <code>undefined</code>), redeclarable — legacy, avoid.</li>
+<li><strong>let:</strong> block-scoped, reassignable.</li>
+<li><strong>const:</strong> block-scoped, not reassignable (though a const <em>object's contents</em> can still mutate).</li>
+</ul>
+<p><strong>Hoisting:</strong> declarations are processed before execution. <code>var</code> is hoisted and initialized to <code>undefined</code>; <code>let</code>/<code>const</code> are hoisted but <strong>not initialized</strong> — referencing them before their declaration throws. That gap is the <strong>Temporal Dead Zone (TDZ)</strong>.</p>
+<p>Use <code>const</code> by default, <code>let</code> when you must reassign, never <code>var</code>.</p>
+<div class="say"><strong>Say this:</strong> "var is function-scoped and hoisted to undefined, and it's legacy — I avoid it. let is block-scoped and reassignable; const can't be reassigned, though a const object's contents can mutate. Hoisting moves declarations up: var is initialized to undefined, but let and const are hoisted without initialization, so referencing them before their declaration throws — that gap is the Temporal Dead Zone. I use const by default, let when I must reassign, and never var; the TDZ turns use-before-declaration into an error."</div>
+`,
+
+"frontend-javascript-typescript-angular__vs-type-coercion": `
+<p class="lead"><code>===</code> (strict equality) compares value <em>and</em> type with no coercion (<code>1 === "1"</code> is false). <code>==</code> (loose) coerces types first, giving surprises.</p>
+<pre><code>1 == "1"          // true   (coerced)
+0 == ""           // true
+null == undefined // true
+NaN == NaN        // false  (NaN equals nothing)</code></pre>
+<p>The coercion rules are error-prone, so <strong>always use <code>===</code>/<code>!==</code></strong> — the one common exception is <code>== null</code> to catch null <em>or</em> undefined together. Coercion also appears in <code>+</code> (concat vs add) and truthy/falsy checks (<code>0, "", null, undefined, NaN, false</code> are falsy).</p>
+<div class="say"><strong>Say this:</strong> "=== is strict equality — value and type, no coercion, so 1 === '1' is false. == coerces first, so 1 == '1' is true, with surprises like 0 == '' being true and null == undefined being true. The rules are error-prone, so I always use === and !==, with the one exception of == null to catch null or undefined together. Coercion also shows up in + doing concat versus addition and in truthy/falsy checks. I prefer strict equality and am explicit about conversions."</div>
+`,
+
+"frontend-javascript-typescript-angular__typescript-generics-union-types-narrowing": `
+<p class="lead">TypeScript adds static types to JS; three core features make its APIs precise.</p>
+<ul>
+<li><strong>Generics:</strong> type parameters for reusable, type-safe code — <code>function identity&lt;T&gt;(x: T): T</code>, <code>Array&lt;T&gt;</code> — the type flows through; constrain with <code>extends</code>.</li>
+<li><strong>Union types:</strong> a value that can be one of several types — <code>string | number</code>, or a <strong>discriminated union</strong> (<code>{kind:"a"} | {kind:"b"}</code>) for modeling variants.</li>
+<li><strong>Narrowing:</strong> TypeScript reduces a union to a specific type from checks — <code>typeof</code>, <code>instanceof</code>, <code>in</code>, or a discriminant — so the compiler knows the exact type in each branch.</li>
+</ul>
+<p>With custom type guards (<code>x is Foo</code>) and utility types (Partial, Pick, Record), that gives safe, precise APIs.</p>
+<div class="say"><strong>Say this:</strong> "TypeScript adds static types. Generics are type parameters for reusable, type-safe code that flows the type through, constrained via extends. Union types let a value be one of several types, like a discriminated union with a kind property for variants. Narrowing reduces a union to a specific type from checks — typeof, instanceof, in, or a discriminant — so the compiler knows the exact type per branch. With custom type guards and utility types like Partial and Record, that gives precise, safe APIs."</div>
+`,
+
+"frontend-javascript-typescript-angular__angular-essentials-components-services-rxjs-change-detection": `
+<p class="lead">Angular is a component-based TypeScript SPA framework.</p>
+<ul>
+<li><strong>Components:</strong> a class + template + styles composing a UI tree; <code>@Input</code> passes data down, <code>@Output</code>/<code>EventEmitter</code> emits events up.</li>
+<li><strong>Services + DI:</strong> shared logic/state in injectable services, provided via Angular's dependency injection (singleton by default).</li>
+<li><strong>RxJS:</strong> Observables model async streams (HTTP, events), composed with operators (<code>map</code>, <code>switchMap</code>) and consumed with the <strong>async pipe</strong> (auto subscribe/unsubscribe).</li>
+<li><strong>Change detection:</strong> checks the component tree to update the DOM — triggered by zone.js on every event; the <strong>OnPush</strong> strategy only re-checks on input (reference) changes or local events — a key performance lever.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Angular is a component-based TypeScript SPA framework. Components are a class, template and styles, with @Input down and @Output up. Shared logic lives in injectable services via DI, singletons by default. It's reactive via RxJS — Observables for async streams composed with operators like switchMap and consumed with the async pipe, which auto-subscribes and unsubscribes. Change detection checks the tree to update the DOM, triggered by zone.js on every event, and I use OnPush to only re-check on input changes or local events for performance."</div>
+`,
+
+"frontend-javascript-typescript-angular__event-bubbling-capturing-delegation": `
+<p class="lead">DOM events propagate in three phases: <strong>capturing</strong> (root → target), <strong>target</strong>, then <strong>bubbling</strong> (target → root). Most handlers run in the bubbling phase, so a click on a button also fires handlers on its ancestors.</p>
+<ul>
+<li><code>addEventListener(..., { capture: true })</code> listens on the way down; default is bubbling.</li>
+<li><code>stopPropagation()</code> halts propagation; <code>preventDefault()</code> stops the browser's default action (not propagation).</li>
+</ul>
+<p><strong>Event delegation:</strong> instead of a handler on many children, put <em>one</em> on a common ancestor and use <code>event.target</code> to find which child was clicked — fewer listeners, and it works for dynamically-added elements.</p>
+<div class="say"><strong>Say this:</strong> "DOM events propagate in three phases: capturing from the root down, the target phase, then bubbling back up — so a click on a button also fires handlers on its ancestors. By default handlers run in bubbling; passing capture true listens on the way down. stopPropagation halts propagation, preventDefault stops the default action. Event delegation uses bubbling: one handler on a common ancestor, checking event.target for which child was clicked — fewer listeners and it works for dynamically-added elements."</div>
+`,
+
+"frontend-javascript-typescript-angular__debounce-vs-throttle": `
+<p class="lead">Two techniques to limit how often a function runs on frequent events (scroll, resize, keyup, mousemove).</p>
+<ul>
+<li><strong>Debounce:</strong> wait until the events <em>stop</em> for N ms, then run once — collapses a burst into one call at the end. Use for search-as-you-type (wait for a pause), autosave, resize-end.</li>
+<li><strong>Throttle:</strong> run at most once per N ms during a continuous stream — a steady rate. Use for scroll handlers, mousemove, rate-limiting.</li>
+</ul>
+<p>Mnemonic: <strong>debounce = wait for quiet; throttle = steady cadence</strong>. Implement with timers, or RxJS <code>debounceTime</code>/<code>throttleTime</code>.</p>
+<div class="say"><strong>Say this:</strong> "Both limit how often a function runs on frequent events. Debounce waits until the events stop for N milliseconds then runs once — collapsing a burst into one call at the end, ideal for search-as-you-type where I wait for the user to pause. Throttle runs at most once per N milliseconds during a continuous stream — a steady rate, ideal for scroll or mousemove. The mnemonic is debounce waits for quiet, throttle keeps a steady cadence. I use timers, or RxJS debounceTime and throttleTime."</div>
+`,
+
+"frontend-javascript-typescript-angular__css-specificity-flexbox-vs-grid": `
+<p class="lead">Two CSS essentials.</p>
+<h2>Specificity</h2>
+<p>Decides which conflicting rule wins: <strong>inline styles &gt; IDs &gt; classes/attributes/pseudo-classes &gt; elements</strong>; ties go to the last rule; <code>!important</code> overrides (avoid it). Keep selectors low-specificity for maintainability.</p>
+<h2>Flexbox vs Grid</h2>
+<ul>
+<li><strong>Flexbox:</strong> <em>one-dimensional</em> — lay items along a row or column; great for components, toolbars, alignment on one axis.</li>
+<li><strong>Grid:</strong> <em>two-dimensional</em> — rows and columns together; great for page/section layouts.</li>
+</ul>
+<p>Rule of thumb: Flexbox for content flow on one axis, Grid for 2D layout — and they compose.</p>
+<div class="say"><strong>Say this:</strong> "Specificity decides which conflicting rule wins: inline beats IDs, which beat classes, which beat element selectors, ties to the last rule; I keep selectors low-specificity and avoid !important. For layout, Flexbox is one-dimensional — items along a row or column — great for components and toolbars. Grid is two-dimensional, rows and columns together — great for page layouts. The rule of thumb is Flexbox for one axis, Grid for 2D, and they compose."</div>
+`,
+
+"frontend-javascript-typescript-angular__esm-vs-commonjs-modules": `
+<p class="lead">Two JavaScript module systems.</p>
+<ul>
+<li><strong>CommonJS (CJS):</strong> Node's original — <code>require()</code> / <code>module.exports</code>; <em>synchronous</em> and <em>dynamic</em> (you can require conditionally).</li>
+<li><strong>ESM (ES Modules):</strong> the standard — <code>import</code>/<code>export</code>; <em>static</em> (imports resolved at parse time → <strong>tree-shaking</strong>), asynchronous, browser-native, supports top-level <code>await</code>.</li>
+</ul>
+<p>ESM's static nature enables dead-code elimination that CJS can't. Interop between them is tricky; in Node you opt into ESM with <code>"type":"module"</code> or <code>.mjs</code>. Modern code uses ESM; bundlers (Vite, esbuild) handle both.</p>
+<div class="say"><strong>Say this:</strong> "CommonJS is Node's original — require and module.exports, synchronous and dynamic, so you can require conditionally. ESM is the standard — import/export, static so imports resolve at parse time, which enables tree-shaking, plus it's async, browser-native, and supports top-level await. ESM's static nature allows dead-code elimination CommonJS can't. Interop is tricky, and in Node I opt into ESM with type module or .mjs. Modern code uses ESM and bundlers like Vite handle both — ESM is the standard going forward."</div>
+`,
 };
