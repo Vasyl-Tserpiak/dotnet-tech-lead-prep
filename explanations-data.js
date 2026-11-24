@@ -2487,4 +2487,831 @@ var results = await Task.WhenAll(tasks);              // each wrapped as Result&
 <p>Keep gRPC for internal service-to-service calls; expose REST or gRPC-Web at the edge for the Angular front end.</p>
 <div class="say"><strong>Say this:</strong> "Browsers don't expose raw HTTP/2 frames to JavaScript, so standard gRPC can't run from a page. I use gRPC-Web — a browser-compatible variant via a proxy or ASP.NET Core's middleware, with limited streaming — or gRPC JSON transcoding to expose the same proto service as REST via annotations. I keep gRPC for internal service-to-service and expose REST or gRPC-Web at the edge for the Angular front end."</div>
 `,
+
+"concurrency-control__optimistic-sql-rowversion-version-column": `
+<p class="lead">Optimistic concurrency assumes conflicts are <em>rare</em>: you read a row with its version, and on update you check the version still matches. If someone else changed it, your update affects zero rows and you retry — no locks held between read and write.</p>
+<pre><code>-- row carries a version/rowversion column
+UPDATE Orders SET Status = @new, Version = Version + 1
+WHERE Id = @id AND Version = @versionIRead;   -- 0 rows affected = conflict</code></pre>
+<p>SQL Server <code>rowversion</code> auto-increments on any change. EF Core maps <code>[Timestamp]</code> / <code>IsRowVersion()</code> and throws <code>DbUpdateConcurrencyException</code> when the row count is zero.</p>
+<p>Ideal for low-contention, stateless web apps — no lock is held across user think-time. Under high contention you get many retries.</p>
+<div class="say"><strong>Say this:</strong> "Optimistic concurrency assumes conflicts are rare — I read the row with a version column, and on update I add WHERE version = the one I read. If someone changed it in between, zero rows update and I retry or tell the user. No lock is held across user think-time, which is why it's ideal for stateless web apps. EF surfaces it as DbUpdateConcurrencyException."</div>
+`,
+
+"concurrency-control__optimistic-nosql-etag-etag-cosmos": `
+<p class="lead">The same pattern in a document store: each document carries an <strong>ETag</strong> (version). You do a <em>conditional write</em> — "replace only if the ETag still matches" — and if it changed, the store rejects with <strong>412 Precondition Failed</strong>, so you retry.</p>
+<ul>
+<li><strong>Cosmos DB:</strong> read the document's <code>_etag</code>, write with an <code>IfMatch</code> condition.</li>
+<li><strong>DynamoDB:</strong> a version attribute plus a conditional expression (<code>attribute_exists</code> / <code>version = :v</code>).</li>
+</ul>
+<p>Distributed, lock-free, and scalable — you just handle the 412/conditional-failure retry. It's the natural concurrency model for partitioned, eventually-consistent stores where you can't hold a lock across a write.</p>
+<div class="say"><strong>Say this:</strong> "In a document store it's the same pattern with an ETag: I read the doc's _etag and do a conditional replace with IfMatch; if it changed, Cosmos returns 412 and I retry. DynamoDB does it with a version attribute and a conditional expression. It's optimistic concurrency without locks — the right fit for partitioned NoSQL where you can't hold a lock across the write."</div>
+`,
+
+"concurrency-control__pessimistic-sql-locks-select-for-update": `
+<p class="lead">Pessimistic concurrency assumes conflicts are <em>likely</em>: you <strong>lock the row when you read it</strong> so no one else can change it until you commit.</p>
+<pre><code>-- PostgreSQL / standard
+SELECT * FROM Inventory WHERE Id = @id FOR UPDATE;   -- lock held until COMMIT
+-- SQL Server
+SELECT * FROM Inventory WITH (UPDLOCK, HOLDLOCK) WHERE Id = @id;</code></pre>
+<p>It prevents concurrent modification but <strong>serializes access</strong> and risks blocking and deadlocks. Keep the transaction short and <strong>never hold a lock across user think-time</strong>.</p>
+<p>Use it for high-contention critical sections (decrementing inventory, allocating a seat) or when a retry would be expensive.</p>
+<div class="say"><strong>Say this:</strong> "Pessimistic concurrency assumes conflicts are likely, so I lock the row on read — SELECT FOR UPDATE, or WITH (UPDLOCK, HOLDLOCK) on SQL Server — and hold it until commit. It prevents conflicts but serializes access and risks blocking and deadlocks, so I keep the transaction short and never hold a lock across user think-time. I use it for high-contention critical sections where a retry would be costly."</div>
+`,
+
+"concurrency-control__pessimistic-nosql-lease-lock-document": `
+<p class="lead">Most NoSQL stores have no row locks, so you <strong>emulate</strong> pessimistic locking with a <em>lease</em>: a conditional write of a lock document (owner + expiry/TTL); others see it's locked and back off; you release by deleting it.</p>
+<div class="warn"><strong>The TTL is essential</strong> — without an expiry, a crashed holder's lock would block the resource forever. With a TTL, the lock auto-releases, but then two holders can briefly overlap, so pair it with a <strong>fencing token</strong>.</div>
+<p>This is rarely the right choice — optimistic ETag concurrency is the NoSQL default. Reach for a lease only when you genuinely need exclusive access across multiple steps.</p>
+<div class="say"><strong>Say this:</strong> "NoSQL usually has no row locks, so I emulate pessimistic locking with a lease — a conditional write of a lock document with an owner and a TTL, released by deleting it; the TTL ensures a crashed holder's lock expires. It's rarely the right choice — optimistic ETag concurrency is the NoSQL default — so I only use a lease when I truly need exclusive access across steps, and I pair it with a fencing token."</div>
+`,
+
+"concurrency-control__distributed-locks-fencing-tokens": `
+<p class="lead">When you must coordinate exclusive access <em>across processes or services</em> (not within one database transaction), you need a <strong>distributed lock</strong> — a shared store grants the lock: Redis <code>SET key token NX PX ttl</code>, a database row, or ZooKeeper/etcd.</p>
+<div class="warn"><strong>The trap:</strong> the lock has a TTL. If the work outruns it, the lock expires, a second holder acquires it, and two workers run at once.</div>
+<h2>Fencing tokens</h2>
+<p>Hand out a <strong>monotonically increasing number</strong> with the lock. The protected resource records the highest token it has seen and <strong>rejects any write carrying a lower token</strong> — so a stale lock holder's late write is refused even though it still "thinks" it holds the lock.</p>
+<div class="say"><strong>Say this:</strong> "A distributed lock coordinates exclusive access across processes — Redis SET NX with a TTL, or ZooKeeper/etcd. The trap is the TTL: if work outruns it, a second holder starts and two run at once. So for correctness I add a fencing token — a monotonically increasing number the resource checks, rejecting any lower token. The lock gives exclusion only if nothing overruns the TTL; the fencing token makes it actually safe."</div>
+`,
+
+"concurrency-control__isolation-levels-acid": `
+<p class="lead"><strong>ACID</strong> = Atomicity (all-or-nothing), Consistency (constraints hold), Isolation (concurrent transactions don't interfere), Durability (committed data survives a crash). <strong>Isolation levels</strong> trade consistency for concurrency.</p>
+<table>
+<tr><th>Level</th><th>Allows</th></tr>
+<tr><td>Read Uncommitted</td><td>dirty reads</td></tr>
+<tr><td>Read Committed <em>(usual default)</em></td><td>non-repeatable reads</td></tr>
+<tr><td>Repeatable Read</td><td>phantoms</td></tr>
+<tr><td>Serializable</td><td>nothing — as if transactions ran one at a time</td></tr>
+</table>
+<p>Each level prevents more anomalies at more locking/abort cost. <strong>Postgres uses MVCC</strong> (snapshots) so readers don't block writers; <strong>SQL Server</strong> defaults to locking Read Committed (or RCSI with row-versioned snapshots).</p>
+<div class="say"><strong>Say this:</strong> "ACID is atomicity, consistency, isolation, durability. Isolation levels trade consistency for concurrency: Read Uncommitted allows dirty reads, Read Committed only committed data but non-repeatable reads, Repeatable Read stabilizes rows you've read but allows phantoms, and Serializable is full isolation. Postgres uses MVCC so readers don't block writers; SQL Server defaults to locking Read Committed unless you enable RCSI."</div>
+`,
+
+"concurrency-control__concurrency-anomalies-dirty-non-repeatable-phantom-write-skew": `
+<p class="lead">The anomalies that isolation levels exist to prevent — know which level stops each.</p>
+<ul>
+<li><strong>Dirty read:</strong> reading another transaction's uncommitted change (which may roll back). Stopped by <em>Read Committed</em>.</li>
+<li><strong>Non-repeatable read:</strong> re-reading a row and seeing it changed (another txn committed an update). Stopped by <em>Repeatable Read</em>.</li>
+<li><strong>Phantom read:</strong> re-running a range query and seeing new rows (another txn inserted). Stopped by <em>Serializable</em> (or range locks).</li>
+<li><strong>Write skew:</strong> two transactions read overlapping data and each writes based on what it read, together breaking an invariant neither sees — the classic "both doctors go off-call because each sees the other on-call". Stopped only by <em>Serializable</em> (Postgres SSI), <strong>not</strong> by snapshot/Repeatable Read.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "A dirty read is reading uncommitted data, stopped by Read Committed; a non-repeatable read is a row changing between reads, stopped by Repeatable Read; a phantom is new rows in a repeated range query, stopped by Serializable. The subtle one is write skew — two transactions each read overlapping data and write based on it, breaking an invariant neither sees — which only Serializable, Postgres's SSI, prevents, not snapshot isolation."</div>
+`,
+
+"concurrency-control__deadlocks-retrying-the-victim": `
+<p class="lead">A deadlock is two transactions each holding a lock the other needs. The database's <strong>deadlock detector</strong> picks a victim and rolls it back (error 1205 in SQL Server, <code>deadlock detected</code> in Postgres) — so the application must <strong>catch that and retry</strong> the victim's transaction.</p>
+<h2>Reduce their frequency</h2>
+<ul>
+<li>Access objects in a <strong>consistent order</strong> everywhere.</li>
+<li>Keep transactions <strong>short</strong>; never wait on user input inside one.</li>
+<li>Index well so each statement <strong>locks fewer rows</strong>.</li>
+<li>Use the lowest safe isolation level.</li>
+</ul>
+<p>Deadlocks are normal under contention — retry logic is part of the design, not a sign of a bug.</p>
+<div class="say"><strong>Say this:</strong> "A deadlock is two transactions each holding a lock the other needs; the database detects it, picks a victim, and rolls it back — 1205 in SQL Server. The app must catch that and retry the victim. I reduce them by touching objects in a consistent order, keeping transactions short, indexing so fewer rows are locked, and never waiting on user input inside a transaction. Deadlocks are normal under contention, so retry logic is part of the design."</div>
+`,
+
+"ef-core-data-access__dbcontext-lifetime-pooling-thread-safety": `
+<p class="lead"><code>DbContext</code> is a unit of work with an identity map and change tracker — and it is <strong>not thread-safe</strong>. Use one per request/operation; never share it across threads or concurrent awaits.</p>
+<ul>
+<li>Registered <strong>Scoped</strong> in DI (one per request). <code>AddDbContextPool</code> reuses instances (resetting state) to cut allocation on high-throughput APIs.</li>
+<li>A long-lived context accumulates tracked entities — more memory and slower <code>SaveChanges</code>.</li>
+<li>Running parallel queries on one context throws; for background or parallel work, create a scope per unit of work.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "DbContext is a unit of work with an identity map and change tracker, and it's not thread-safe — one per request, never shared across threads or concurrent awaits. It's Scoped, and DbContextPool reuses instances to cut allocation on hot APIs. A long-lived context accumulates tracked entities and slows down, so for background or parallel work I create a scope per unit of work."</div>
+`,
+
+"ef-core-data-access__change-tracking-entity-states-asnotracking": `
+<p class="lead">EF tracks loaded entities and detects changes at <code>SaveChanges</code>. Each entity has a <strong>state</strong>: Added, Unchanged, Modified, Deleted, or Detached.</p>
+<p>Tracking builds a <strong>snapshot</strong> per entity and diffs it on save to generate the right INSERT/UPDATE/DELETE — that snapshotting costs memory and CPU. For read-only queries use <code>AsNoTracking</code>: no snapshots, faster, less memory. For disconnected updates, <code>Attach</code> and mark <code>Modified</code> rather than reloading.</p>
+<div class="say"><strong>Say this:</strong> "EF tracks loaded entities with states — Added, Unchanged, Modified, Deleted, Detached — and on SaveChanges it diffs each against a snapshot to emit the right INSERT/UPDATE/DELETE. That snapshotting costs memory and CPU, so for read-only queries I use AsNoTracking, and for disconnected updates I Attach and mark Modified instead of reloading."</div>
+`,
+
+"ef-core-data-access__asnotracking-vs-asnotrackingwithidentityresolution": `
+<p class="lead"><code>AsNoTracking</code> skips the change tracker for fast reads — but without tracking there's no identity map, so the same row reached via different navigations becomes <strong>multiple distinct object instances</strong>.</p>
+<p><code>AsNoTrackingWithIdentityResolution</code> keeps a lightweight identity map <em>for that query</em>, so repeated rows collapse to one instance — at a small cost.</p>
+<p>Use plain <code>AsNoTracking</code> for flat projections; use the identity-resolution variant when a no-tracking query with includes/joins would otherwise duplicate the same entity.</p>
+<div class="say"><strong>Say this:</strong> "AsNoTracking skips the change tracker for fast reads, but without the identity map the same row reached via different navigations becomes separate instances. AsNoTrackingWithIdentityResolution keeps a lightweight identity map so duplicates collapse to one, at a small cost. I use plain AsNoTracking for flat projections and the identity-resolution variant when a no-tracking query with includes would otherwise duplicate an entity."</div>
+`,
+
+"ef-core-data-access__tracking-vs-asnotracking-the-n-1-problem": `
+<p class="lead">Track entities you'll modify; use <code>AsNoTracking</code> for reads. The classic performance trap is <strong>N+1</strong>.</p>
+<p>Looping a list and touching a navigation per item fires <strong>one query for the parents plus N for the children</strong>:</p>
+<pre><code>foreach (var o in db.Orders.ToList())        // 1 query
+    Console.WriteLine(o.Customer.Name);       // + N queries (lazy load per order)</code></pre>
+<p>Fix with eager loading (<code>Include</code>) or a projection (<code>Select</code>) that joins in a single query. Avoid lazy loading — it triggers N+1 silently. Detect it by watching the query log for many near-identical queries.</p>
+<div class="say"><strong>Say this:</strong> "I track entities I'll modify and use AsNoTracking for reads. The classic trap is N+1 — looping parents and touching a navigation per item fires one query plus N for the children. I fix it with Include for eager loading or a projection that joins in one query, and I avoid lazy loading because it causes N+1 silently. I catch it by watching the query log for many near-identical queries."</div>
+`,
+
+"ef-core-data-access__iqueryable-sql-client-side-evaluation": `
+<p class="lead">EF translates an <code>IQueryable</code> expression tree into SQL so filtering and paging run <em>in the database</em>.</p>
+<div class="warn"><strong>Client-side evaluation:</strong> if you use a method EF can't translate, EF Core 3+ <em>throws</em> rather than silently evaluating it in memory over the whole table — safer than the old behavior, but you must restructure the query. Materializing early with <code>ToList</code>/<code>AsEnumerable</code> also switches the rest to LINQ-to-Objects in memory.</div>
+<p>Keep the query as <code>IQueryable</code> until the database has done the filtering, and <strong>project to a DTO</strong> so you pull only the columns you need.</p>
+<div class="say"><strong>Say this:</strong> "EF turns the IQueryable expression tree into SQL so filtering and paging run in the database. If I use an untranslatable method, EF Core 3+ throws rather than silently evaluating client-side over the whole table. I keep the query as IQueryable until the database has filtered, avoid an early ToList, and project to a DTO to pull only the columns I need."</div>
+`,
+
+"ef-core-data-access__include-theninclude-filtered-includes-split-queries": `
+<p class="lead"><code>Include</code> eager-loads a navigation, <code>ThenInclude</code> goes deeper, and a <strong>filtered include</strong> loads a subset (<code>Include(x =&gt; x.Items.Where(i =&gt; i.Active))</code>).</p>
+<div class="warn"><strong>Cartesian explosion:</strong> multiple <em>collection</em> includes in one query multiply the rows (one-to-many-to-many), producing huge result sets.</div>
+<p><code>AsSplitQuery</code> runs each include as a <em>separate</em> query to avoid the explosion — trading the blowup for multiple round-trips and a small consistency window. Use a single query for small includes, split queries for several large collections.</p>
+<div class="say"><strong>Say this:</strong> "Include eager-loads navigations, ThenInclude goes deeper, filtered includes load a subset. The danger is cartesian explosion — multiple collection includes in one query multiply the rows. AsSplitQuery runs each include as its own query to avoid that, trading the blowup for multiple round-trips and a small consistency window. Single query for small includes, split queries for several large collections."</div>
+`,
+
+"ef-core-data-access__savechanges-transactions-unit-of-work": `
+<p class="lead"><code>DbContext</code> <em>is</em> the Unit of Work. <code>SaveChanges</code> wraps all pending changes in a <strong>single transaction</strong> by default — all-or-nothing — ordering inserts/updates/deletes by their dependencies.</p>
+<ul>
+<li>When several <code>SaveChanges</code> calls or raw SQL must be atomic together, open an explicit <code>BeginTransaction</code>.</li>
+<li>Don't call <code>SaveChanges</code> per entity in a loop — that's a round-trip each; let EF batch them.</li>
+<li>Concurrency conflicts surface here as <code>DbUpdateConcurrencyException</code>.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "DbContext is the Unit of Work — SaveChanges commits all pending changes in one transaction, all-or-nothing, ordered by dependencies. When several SaveChanges or raw SQL must be atomic together I open an explicit transaction. I never call SaveChanges per entity in a loop — that's a round-trip each; EF batches them. Concurrency conflicts show up here as DbUpdateConcurrencyException."</div>
+`,
+
+"ef-core-data-access__optimistic-concurrency-in-ef-rowversion": `
+<p class="lead">Add a <strong>rowversion</strong> property (mapped with <code>IsRowVersion()</code> / <code>[Timestamp]</code>). EF includes it in the UPDATE's WHERE clause; if the row changed since you loaded it, zero rows update and EF throws <code>DbUpdateConcurrencyException</code>.</p>
+<p>Handle it: reload the current values and apply a policy — <strong>client-wins, store-wins, or merge</strong> — then retry. It prevents lost updates <em>without holding a lock</em>, the right model for web apps.</p>
+<div class="say"><strong>Say this:</strong> "I add a rowversion mapped with IsRowVersion; EF puts it in the UPDATE's WHERE clause, so if the row changed since I loaded it, zero rows update and EF throws DbUpdateConcurrencyException. I catch that, reload current values, apply a policy — client-wins, store-wins, or merge — and retry. It prevents lost updates without any lock, which is right for web apps."</div>
+`,
+
+"ef-core-data-access__migrations-zero-downtime-schema-changes": `
+<p class="lead">EF migrations version the schema. For <strong>zero-downtime</strong> rolling deploys, old and new code run simultaneously, so every schema change must be <em>backward compatible</em>.</p>
+<h2>Expand-contract (parallel change)</h2>
+<ol>
+<li><strong>Expand:</strong> add a new nullable column/table — old code ignores it.</li>
+<li>Deploy code that writes <em>both</em> old and new and reads the new; backfill existing rows.</li>
+<li><strong>Contract:</strong> in a <em>later</em> release, once no code uses the old column, drop it.</li>
+</ol>
+<p>Never rename or drop a column in one step while old code runs, and avoid migrations that take long table locks (adding a NOT NULL column with a default on a huge table).</p>
+<div class="say"><strong>Say this:</strong> "EF migrations version the schema. For zero-downtime rolling deploys, old and new code run at once, so every change must be backward compatible — I use expand-contract: add a nullable column, deploy code that writes both and reads the new one, backfill, then drop the old column in a later release. I never rename or drop in one step while old code runs, and I avoid migrations that take long table locks."</div>
+`,
+
+"ef-core-data-access__bulk-batch-operations": `
+<p class="lead"><code>SaveChanges</code> batches multiple changes into few round-trips, but loading and tracking thousands of entities to update them is slow and memory-heavy.</p>
+<ul>
+<li><strong>EF Core 7+ <code>ExecuteUpdate</code> / <code>ExecuteDelete</code>:</strong> set-based SQL that updates or deletes matching rows <em>without loading them</em> — ideal for "update all where".</li>
+<li><strong>Bulk insert:</strong> <code>SqlBulkCopy</code> or a bulk-extensions library, not a loop of <code>SaveChanges</code>.</li>
+<li>If you must use plain EF for many rows, chunk the work and disable tracking.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "SaveChanges batches changes, but loading and tracking thousands of entities to update them is slow. EF Core 7+ gives ExecuteUpdate and ExecuteDelete — set-based SQL that changes matching rows without loading them, which I use for 'update all where'. For big inserts I use SqlBulkCopy or a bulk library rather than looping SaveChanges, and I chunk and disable tracking if I must use plain EF."</div>
+`,
+
+"ef-core-data-access__running-raw-sql-safely": `
+<p class="lead">Use <code>FromSqlInterpolated</code> / <code>ExecuteSqlInterpolated</code> (or explicit parameters) — <strong>never string-concatenate user input</strong>, which is SQL injection. The interpolated values in these methods are parameterized automatically.</p>
+<pre><code>// safe: the interpolated value becomes a parameter
+var rows = db.Orders.FromSqlInterpolated(
+    $"SELECT * FROM Orders WHERE Status = {status}");</code></pre>
+<p>Use raw SQL for performance-critical queries EF can't express; it still composes with LINQ (<code>FromSql(...).Where(...)</code>). Identifiers like table/column names <em>can't</em> be parameterized — <strong>allowlist</strong> them instead of interpolating user input.</p>
+<div class="say"><strong>Say this:</strong> "I run raw SQL with FromSqlInterpolated / ExecuteSqlInterpolated, which parameterize the interpolated values automatically, or FromSqlRaw with explicit parameters — never string concatenation, which is injection. I use it for performance-critical queries EF can't express, and it still composes with LINQ. Identifiers can't be parameterized, so I allowlist table and column names rather than interpolating input."</div>
+`,
+
+"ef-core-data-access__global-query-filters-multi-tenant-soft-delete": `
+<p class="lead"><code>HasQueryFilter</code> applies a predicate automatically to <em>every</em> query for an entity — perfect for <strong>soft delete</strong> (<code>WHERE IsDeleted = 0</code>) and <strong>multi-tenancy</strong> (<code>WHERE TenantId = current</code>), because you can't forget to add the WHERE.</p>
+<p>Pull the current tenant from the request context so isolation is enforced <em>centrally</em>, not per query.</p>
+<div class="warn"><strong>Gotchas:</strong> <code>IgnoreQueryFilters()</code> bypasses it; and a required navigation to a filtered entity can silently exclude rows.</div>
+<div class="say"><strong>Say this:</strong> "Global query filters via HasQueryFilter apply a predicate to every query for an entity — ideal for soft delete and multi-tenancy because you can't forget the WHERE. I pull the current tenant from the request context so TenantId filtering is enforced centrally. The gotchas: IgnoreQueryFilters bypasses it, and a required navigation to a filtered entity can silently drop rows."</div>
+`,
+
+"ef-core-data-access__keyset-vs-offset-pagination": `
+<p class="lead"><strong>Offset</strong> pagination (<code>Skip</code>/<code>Take</code>, <code>OFFSET/FETCH</code>) is simple but slow deep in the list — the database scans and <em>discards</em> all skipped rows — and pages shift if data changes between requests.</p>
+<p><strong>Keyset (seek)</strong> pagination filters from the last row's key:</p>
+<pre><code>WHERE (SortKey, Id) &gt; (@lastSort, @lastId)
+ORDER BY SortKey, Id
+LIMIT @n;      -- uses the index, constant-time at any depth, stable under inserts</code></pre>
+<p>The trade: only next/prev, no jump to page 500. Use keyset for large lists and feeds; offset for small admin grids.</p>
+<div class="say"><strong>Say this:</strong> "Offset pagination degrades deep in the list because the database scans and throws away the skipped rows, and pages shift if data changes. Keyset pagination seeks from the last row's key with a WHERE on the sort key — it uses the index, stays constant-time at any depth, and is stable under inserts. The trade is next/prev only, no jumping to page 500. Keyset for large lists and feeds, offset for small grids."</div>
+`,
+
+"ef-core-data-access__connection-pool-exhaustion-causes-diagnosis": `
+<p class="lead">ADO.NET pools database connections (default <strong>max 100</strong> per connection string). Exhaustion surfaces as "timeout expired — all pooled connections are in use".</p>
+<h2>Causes</h2>
+<ul>
+<li>Not disposing <code>DbContext</code>/connections (leaks).</li>
+<li>Long transactions or queries holding a connection.</li>
+<li><strong>Sync-over-async</strong> starving the thread pool so connections aren't returned.</li>
+<li>Pool size too low for the load.</li>
+</ul>
+<p>Diagnose with pool metrics, the timeout errors, and many sleeping sessions on the server. Fix by disposing everything (Scoped <code>DbContext</code>), keeping transactions short, going async, and only then raising <code>Max Pool Size</code>.</p>
+<div class="say"><strong>Say this:</strong> "ADO.NET pools connections, default max 100, and exhaustion shows as 'timeout expired, all pooled connections in use'. The usual causes are undisposed DbContext or connections, long transactions holding a connection, and sync-over-async starving threads so connections aren't returned. I diagnose with pool metrics and sleeping sessions, and fix by disposing via Scoped DbContext, short transactions, going async, and only then raising the pool size."</div>
+`,
+
+"ef-core-data-access__a-query-50ms-local-but-5s-in-prod-diagnose": `
+<p class="lead">The same query running 100x slower in production means the difference is <strong>data volume, statistics, plan, or parameters</strong> — not the SQL itself.</p>
+<h2>Checklist</h2>
+<ul>
+<li>Prod has far more rows → a <strong>missing index</strong> that didn't matter on tiny local data.</li>
+<li><strong>Stale statistics</strong> → the optimizer picks a bad plan.</li>
+<li><strong>Parameter sniffing</strong> → a cached plan built for an atypical value.</li>
+<li><strong>N+1 / client-side evaluation</strong> only visible at real scale; or <strong>blocking</strong> under concurrency.</li>
+</ul>
+<p>Pull the <em>actual</em> execution plan from prod (or Query Store), compare, and fix the root cause — add the index, update stats, or address the sniffing.</p>
+<div class="say"><strong>Say this:</strong> "Same query, 100x slower in prod means the difference is data volume, statistics, plan, or parameters. First I pull the actual execution plan from prod or Query Store — usually a missing index that didn't matter on tiny local data, stale statistics, or parameter sniffing caching a plan for an atypical value. It can also be N+1 or blocking only visible at scale. I fix the root cause rather than guessing."</div>
+`,
+
+"ef-core-data-access__transaction-isolation-levels-deadlocks": `
+<p class="lead">EF uses the provider's default isolation (usually Read Committed). You can raise it on an explicit transaction (<code>BeginTransaction(IsolationLevel.Serializable)</code>) — at the cost of more locking, blocking, and deadlocks.</p>
+<p>EF does <strong>not</strong> retry deadlocks automatically. Enable a retrying <strong>execution strategy</strong> (<code>EnableRetryOnFailure</code>) or catch the deadlock (SQL error 1205) and retry the whole unit of work. Keep transactions short and access objects in a consistent order.</p>
+<div class="say"><strong>Say this:</strong> "EF uses the provider's default isolation, usually Read Committed, and I raise it on an explicit transaction when I need stronger guarantees — at the cost of more locking and deadlocks. EF doesn't retry deadlocks on its own, so I enable a retrying execution strategy or catch the 1205 and retry the whole unit of work, keeping transactions short and access order consistent."</div>
+`,
+
+"ef-core-data-access__what-acid-actually-guarantees": `
+<p class="lead">ACID, precisely:</p>
+<ul>
+<li><strong>Atomicity:</strong> all-or-nothing — a failure rolls the whole transaction back.</li>
+<li><strong>Consistency:</strong> it moves the database from one valid state to another — constraints, FKs, triggers hold.</li>
+<li><strong>Isolation:</strong> concurrent transactions don't see each other's partial work, to the degree the isolation level provides.</li>
+<li><strong>Durability:</strong> once committed, it survives a crash (the write-ahead/transaction log is flushed).</li>
+</ul>
+<div class="warn"><strong>Note:</strong> ACID "Consistency" is database-constraint consistency, <em>not</em> the distributed-systems CAP "consistency". Isolation is the property you actually tune.</div>
+<div class="say"><strong>Say this:</strong> "Atomicity is all-or-nothing with rollback; Consistency means constraints and FKs hold so the database goes valid-to-valid; Isolation means concurrent transactions don't see each other's partial work to the degree the level allows; Durability means a commit survives a crash because the log is flushed. The ACID 'consistency' is constraint consistency, not CAP consistency — and isolation is the dial I tune."</div>
+`,
+
+"ef-core-data-access__index-design-composite-order-covering-indexes": `
+<p class="lead">A composite index <code>(A, B, C)</code> is ordered by A, then B, then C — so it serves predicates on a <strong>left prefix</strong> (A, or A+B, or A+B+C), and a range only on the last used column.</p>
+<ul>
+<li>Put <strong>equality columns first</strong>, then the range/sort column — a range on an early column stops the index being used for later ones.</li>
+<li>A <strong>covering index</strong> <code>INCLUDE</code>s the query's other columns so it's answered <em>from the index alone</em>, with no key lookup to the table.</li>
+<li>Don't over-index — every index slows writes and uses space. Index for your top queries.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "A composite index is ordered left to right, so it serves a left prefix — equality columns first, then the range or sort column, because a range on an early column stops the index for later ones. A covering index adds the query's other columns with INCLUDE so it's answered from the index alone without a lookup. I index for the hot queries and don't over-index, since every index slows writes."</div>
+`,
+
+"ef-core-data-access__optimistic-vs-pessimistic-concurrency": `
+<p class="lead">Two strategies for concurrent updates.</p>
+<table>
+<tr><th></th><th>Optimistic</th><th>Pessimistic</th></tr>
+<tr><td>Mechanism</td><td>rowversion, check on write</td><td>lock on read (FOR UPDATE)</td></tr>
+<tr><td>Locks</td><td>none held</td><td>held until commit</td></tr>
+<tr><td>Conflict</td><td>retry</td><td>others block</td></tr>
+<tr><td>Best for</td><td>low contention, web</td><td>short high-contention sections</td></tr>
+</table>
+<p>In EF/web apps, optimistic is the default — stateless, no locks across requests, scales; the cost is retries under contention. Pessimistic is only for short, high-contention critical sections where a retry is costly, and never across user think-time.</p>
+<div class="say"><strong>Say this:</strong> "Optimistic — a rowversion and retry on conflict — is my default in EF web apps because it holds no locks across requests and scales; the cost is retries under contention. Pessimistic locking with FOR UPDATE is only for short, high-contention sections where a retry is expensive, and I never hold the lock across user think-time. I choose by contention and the cost of a retry."</div>
+`,
+
+"ef-core-data-access__read-write-splitting-with-replicas-the-catch": `
+<p class="lead">Route writes to the primary and reads to read replicas to scale reads. <strong>The catch is replication lag:</strong> a replica is slightly behind, so a read right after a write may not see it — a read-your-writes violation.</p>
+<h2>How to handle it</h2>
+<ul>
+<li>Route reads that must see the latest write to the <strong>primary</strong> (e.g., right after a write, or within the same user session).</li>
+<li>Accept <strong>bounded staleness</strong> for non-critical reads.</li>
+</ul>
+<p>In EF this means separate contexts/connection strings for primary and replica plus routing logic.</p>
+<div class="say"><strong>Say this:</strong> "I scale reads by sending writes to the primary and reads to replicas, but the catch is replication lag — a replica is behind, so a read right after a write can miss it, breaking read-your-writes. I route reads that must be current to the primary, or keep a user on the primary briefly after they write, and accept bounded staleness for the rest. In EF that's separate contexts for primary and replica plus routing."</div>
+`,
+
+"ef-core-data-access__normalization-denormalization-sharding-read-replicas": `
+<p class="lead">Four data-modeling and scaling levers:</p>
+<ul>
+<li><strong>Normalization</strong> stores each fact once — fewer anomalies, smaller writes, but more joins.</li>
+<li><strong>Denormalization</strong> duplicates data to avoid joins — faster reads, but update anomalies and you must keep copies in sync.</li>
+<li><strong>Read replicas</strong> scale reads with some lag.</li>
+<li><strong>Sharding</strong> splits data across nodes by a shard key to scale writes/storage — but cross-shard queries and transactions get hard, and hot shards need care.</li>
+</ul>
+<p>Normalize by default; denormalize, replicate, or shard only for a specific, measured bottleneck.</p>
+<div class="say"><strong>Say this:</strong> "Normalization stores each fact once — fewer anomalies, smaller writes, more joins; denormalization duplicates to avoid joins — faster reads but you must keep copies in sync. Read replicas scale reads with lag; sharding splits by a key to scale writes and storage but makes cross-shard queries and transactions hard. I normalize by default and only denormalize, replicate, or shard for a measured bottleneck."</div>
+`,
+
+"sql-server__clustered-vs-nonclustered-index": `
+<p class="lead">A <strong>clustered index</strong> <em>is</em> the table — it defines the physical order of the rows, so there's one per table (usually the primary key). A <strong>nonclustered index</strong> is a separate structure of key columns + a pointer back to the row.</p>
+<ul>
+<li>Clustered: great for range scans on the key; the leaf level holds the full rows.</li>
+<li>Nonclustered: the leaf holds the index key and a row locator (the clustered key); a lookup is needed for columns not in the index.</li>
+</ul>
+<p>Choose a clustered key that is narrow, static, ever-increasing, and unique (an IDENTITY/sequence) to avoid page splits and fat nonclustered indexes.</p>
+<div class="say"><strong>Say this:</strong> "The clustered index is the table — it orders the rows physically, one per table, usually the PK. A nonclustered index is a separate structure of key columns plus a pointer back to the row, so it may need a lookup for other columns. I pick a narrow, ever-increasing, unique clustered key to avoid page splits and keep the nonclustered indexes small."</div>
+`,
+
+"sql-server__what-a-heap-is-why-usually-avoid-one": `
+<p class="lead">A <strong>heap</strong> is a table with <em>no clustered index</em> — rows are unordered, and nonclustered indexes point to them by a physical <strong>RID</strong> (row id).</p>
+<div class="warn"><strong>Why usually avoid one:</strong> no order means range queries scan the whole heap; forwarding pointers accumulate on updates (bloat); and nonclustered indexes carry RIDs that break on row moves. Most OLTP tables want a clustered index.</div>
+<p>Heaps can suit staging/bulk-load tables written once and read with full scans, but for general tables add a clustered index.</p>
+<div class="say"><strong>Say this:</strong> "A heap is a table with no clustered index, so rows are unordered and nonclustered indexes reference them by physical RID. I usually avoid it: range queries scan the whole heap, updates create forwarding pointers that bloat it, and row moves break RIDs. Heaps are fine for write-once bulk-load staging, but general OLTP tables get a clustered index."</div>
+`,
+
+"sql-server__covering-index-include-columns": `
+<p class="lead">A <strong>covering index</strong> contains every column a query needs, so the query is answered <em>from the index alone</em> — no lookup back to the table.</p>
+<p>Put the filter/join/sort columns in the <strong>key</strong>, and the extra columns the SELECT returns in <code>INCLUDE</code> (stored only at the leaf, so they don't bloat the tree or affect order).</p>
+<pre><code>CREATE INDEX IX_Orders_Cust ON Orders(CustomerId)
+INCLUDE (Status, Total);   -- query by CustomerId returning Status, Total needs no lookup</code></pre>
+<div class="say"><strong>Say this:</strong> "A covering index has all the columns a query needs, so it's answered from the index with no lookup to the table. I put the filter, join and sort columns in the key and the other SELECTed columns in INCLUDE, which stores them only at the leaf so they don't bloat the tree. It's the fix for an expensive key lookup."</div>
+`,
+
+"sql-server__key-lookup-how-to-remove-it": `
+<p class="lead">A <strong>key lookup</strong> happens when a nonclustered index finds the rows but doesn't have all the columns the query needs, so SQL Server does an extra seek into the clustered index <em>per row</em> — fine for a few rows, expensive for many.</p>
+<h2>How to remove it</h2>
+<ul>
+<li><strong>Make the index covering</strong> — add the missing columns to <code>INCLUDE</code> (or the key if filtered/sorted on).</li>
+<li>Or return fewer columns so the existing index covers the query.</li>
+</ul>
+<p>You spot it in the execution plan as a "Key Lookup (Clustered)" paired with an Index Seek.</p>
+<div class="say"><strong>Say this:</strong> "A key lookup is the nonclustered index finding rows but having to seek the clustered index per row for the missing columns — cheap for a few rows, costly for many. I remove it by making the index covering — add the missing columns to INCLUDE — or by selecting fewer columns. In the plan it's a Key Lookup next to an Index Seek."</div>
+`,
+
+"sql-server__filtered-indexes": `
+<p class="lead">A <strong>filtered index</strong> has a <code>WHERE</code> clause, so it indexes only a <em>subset</em> of rows — smaller, cheaper to maintain, and more selective.</p>
+<pre><code>CREATE INDEX IX_Orders_Open ON Orders(CreatedAt)
+WHERE Status = 'Open';   -- only open orders are indexed</code></pre>
+<p>Great for "status = active" queries, sparse columns, or enforcing uniqueness on non-null values only. The query's predicate must match the filter for the index to be used, and parameterization can sometimes stop it being chosen.</p>
+<div class="say"><strong>Say this:</strong> "A filtered index indexes only a subset of rows via a WHERE clause — smaller and more selective. I use it for queries that always filter on something like Status = 'Open', for sparse columns, or to enforce uniqueness only on non-null values. The query predicate has to match the filter, and over-parameterization can stop the optimizer picking it."</div>
+`,
+
+"sql-server__columnstore-indexes-when-why": `
+<p class="lead">A <strong>columnstore index</strong> stores data by <em>column</em>, not row — heavily compressed and read in batch mode — giving huge gains for analytical/aggregation queries over millions of rows.</p>
+<ul>
+<li><strong>Clustered columnstore:</strong> the whole table as columnstore — for data warehouses/fact tables.</li>
+<li><strong>Nonclustered columnstore:</strong> added to an OLTP table for real-time analytics (HTAP).</li>
+</ul>
+<p>Wins for scans/aggregates; poor for single-row OLTP lookups. The opposite trade-off to a rowstore B-tree.</p>
+<div class="say"><strong>Say this:</strong> "A columnstore index stores data by column with heavy compression and batch-mode execution, so it's enormous wins for analytical scans and aggregations over millions of rows. Clustered columnstore for warehouse fact tables, nonclustered columnstore on an OLTP table for real-time analytics. It's great for scans and aggregates but poor for single-row lookups — the opposite of a rowstore B-tree."</div>
+`,
+
+"sql-server__indexed-materialized-views": `
+<p class="lead">An <strong>indexed view</strong> (SQL Server's materialized view) has a unique clustered index, so its results are <em>physically stored</em> and kept in sync automatically as the base tables change.</p>
+<p>It can pre-compute expensive joins/aggregations so reads hit the stored result instead of recomputing. Costs: it slows writes to the base tables (the view is maintained on every change), and it has strict requirements (SCHEMABINDING, deterministic, no outer joins, etc.).</p>
+<div class="say"><strong>Say this:</strong> "An indexed view is SQL Server's materialized view — a unique clustered index makes its results physically stored and auto-maintained as the base tables change. I use it to pre-compute expensive joins or aggregates so reads are cheap. The cost is slower writes, since the view is maintained on every base change, plus strict requirements like SCHEMABINDING and determinism."</div>
+`,
+
+"sql-server__sargable-predicates": `
+<p class="lead"><strong>SARGable</strong> ("Search ARGument able") predicates let the optimizer <em>seek</em> an index. Wrapping the indexed column in a function or doing arithmetic on it makes the predicate non-SARGable — forcing a full scan.</p>
+<pre><code>-- NON-SARGable (scan): function on the column
+WHERE YEAR(CreatedAt) = 2026
+-- SARGable (seek): range on the raw column
+WHERE CreatedAt &gt;= '2026-01-01' AND CreatedAt &lt; '2027-01-01'</code></pre>
+<p>Keep the indexed column bare on one side, avoid leading wildcards (<code>LIKE '%x'</code>), and avoid implicit type conversions (which also kill seeks).</p>
+<div class="say"><strong>Say this:</strong> "A SARGable predicate keeps the indexed column bare so the optimizer can seek the index; wrapping it in a function like YEAR(col) or doing arithmetic forces a scan. So I rewrite YEAR(col)=2026 as a date range on the raw column, avoid leading-wildcard LIKEs, and watch for implicit conversions, which also kill seeks."</div>
+`,
+
+"sql-server__reading-an-execution-plan-estimated-vs-actual": `
+<p class="lead">The execution plan shows how SQL Server runs a query. The <strong>estimated</strong> plan is the optimizer's chosen plan (no execution); the <strong>actual</strong> plan adds runtime row counts and is what you debug with.</p>
+<h2>What to look for</h2>
+<ul>
+<li><strong>Estimated vs actual rows far apart</strong> → stale statistics or a bad estimate (the root of many problems).</li>
+<li>Scans where a seek is expected; <strong>key lookups</strong>; expensive sorts/hash joins; spills to tempdb.</li>
+<li>Thick arrows (many rows) and high-cost operators.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "The estimated plan is what the optimizer chose; the actual plan adds real row counts and is what I debug with. The first thing I check is estimated versus actual rows — a big gap means stale statistics or a bad estimate, which drives bad join and memory choices. Then I look for unexpected scans, key lookups, and sorts or hash joins spilling to tempdb."</div>
+`,
+
+"sql-server__how-statistics-drive-the-optimizer": `
+<p class="lead">The optimizer is <strong>cost-based</strong>: it uses <strong>statistics</strong> — histograms of column value distribution — to estimate how many rows each operator will produce, and picks the cheapest plan from those estimates.</p>
+<p><strong>Stale or missing statistics</strong> → bad row estimates → bad plans (wrong join type, too-little memory, scan instead of seek). Auto-update kicks in after enough changes, but large tables can lag; update stats manually (or more frequently) when estimates drift.</p>
+<div class="say"><strong>Say this:</strong> "The optimizer is cost-based and drives everything off statistics — histograms of value distribution — to estimate row counts and pick the cheapest plan. Stale or missing stats give bad estimates and therefore bad plans: wrong join types, under-granted memory, scans instead of seeks. Auto-update lags on large tables, so I update statistics manually when I see estimated and actual rows diverge."</div>
+`,
+
+"sql-server__query-store": `
+<p class="lead"><strong>Query Store</strong> is a built-in "flight recorder" for query performance: it captures query text, the plans used over time, and runtime stats (duration, CPU, reads), surviving restarts.</p>
+<h2>Why it's invaluable</h2>
+<ul>
+<li>Spot <strong>plan regressions</strong> — a query that got slower after a plan change.</li>
+<li><strong>Force a good plan</strong> (plan forcing) when the optimizer picks a bad one.</li>
+<li>Find the top resource-consuming queries.</li>
+</ul>
+<p>It's the first tool I reach for to diagnose a "suddenly slow in prod" query.</p>
+<div class="say"><strong>Say this:</strong> "Query Store is SQL Server's flight recorder — it keeps query text, the plans used over time, and runtime stats across restarts. I use it to spot plan regressions where a query got slower after the plan changed, to force a known-good plan, and to find the top resource consumers. It's my first stop for a query that's suddenly slow in production."</div>
+`,
+
+"sql-server__parameter-sniffing-what-how-to-fix": `
+<p class="lead"><strong>Parameter sniffing:</strong> SQL Server builds and caches a plan based on the <em>first</em> parameter value it sees. If that value is atypical, the cached plan is great for it but terrible for other values — so performance swings wildly depending on who ran it first.</p>
+<h2>Fixes</h2>
+<ul>
+<li><code>OPTION (RECOMPILE)</code> — compile a fresh plan every run (CPU cost, but always optimal for the value).</li>
+<li><code>OPTIMIZE FOR</code> a representative value, or <code>OPTIMIZE FOR UNKNOWN</code> (use the average).</li>
+<li>Query Store <strong>plan forcing</strong>; or restructure (local variables, split queries).</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Parameter sniffing is SQL Server caching a plan built for the first parameter value it saw — great for that value, awful for others, so the same query is fast or slow depending on who ran it first. I fix it with OPTION (RECOMPILE) for a fresh plan each run, OPTIMIZE FOR a representative value or UNKNOWN, or Query Store plan forcing."</div>
+`,
+
+"sql-server__option-recompile-local-variables": `
+<p class="lead">Two tools that change how the optimizer estimates — both work around parameter sniffing, differently.</p>
+<ul>
+<li><strong><code>OPTION (RECOMPILE)</code>:</strong> recompile the statement every execution using the <em>actual</em> parameter values — always an optimal plan for this run, at a per-execution compile cost. Good for queries with wildly varying parameters.</li>
+<li><strong>Local variables:</strong> assigning a parameter to a local variable hides its value from the optimizer, which then uses a generic "average" density estimate (like <code>OPTIMIZE FOR UNKNOWN</code>) — a stable, mediocre plan rather than a sniffed one.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "OPTION (RECOMPILE) recompiles the statement each run against the real parameter values, so you always get an optimal plan at a compile cost — good for widely varying parameters. Using a local variable hides the value from the optimizer, so it falls back to an average density estimate — a stable but mediocre plan, like OPTIMIZE FOR UNKNOWN. Both are parameter-sniffing workarounds with different trade-offs."</div>
+`,
+
+"sql-server__isolation-levels-incl-rcsi-snapshot": `
+<p class="lead">SQL Server defaults to <strong>locking</strong> Read Committed — readers take shared locks and block on writers. Two row-versioning options remove that blocking by reading from a version store in tempdb.</p>
+<ul>
+<li><strong>RCSI (Read Committed Snapshot):</strong> database-level switch; each <em>statement</em> reads a consistent snapshot as of its start — readers don't block writers and vice versa, with Read Committed semantics. Often a big concurrency win.</li>
+<li><strong>Snapshot isolation:</strong> each <em>transaction</em> sees a consistent snapshot as of its start — repeatable, but can hit update conflicts and grows tempdb.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "SQL Server's default is locking Read Committed, where readers block writers. RCSI flips the database to row-versioning so each statement reads a consistent snapshot from tempdb — readers and writers stop blocking each other, with Read Committed semantics, usually a big concurrency win. Snapshot isolation gives a per-transaction consistent view but can throw update conflicts and grows tempdb."</div>
+`,
+
+"sql-server__locking-blocking-lock-escalation": `
+<p class="lead"><strong>Locking</strong> enforces isolation; <strong>blocking</strong> is one session waiting on another's lock (normal, brief); a <strong>deadlock</strong> is mutual blocking (fatal, one is killed). <strong>Lock escalation</strong> is SQL Server converting many fine-grained row/page locks into a single table lock once a threshold (~5000 locks) is crossed — saving memory but hurting concurrency.</p>
+<p>Reduce blocking and escalation with good indexes (lock fewer rows), short transactions, the right isolation level (RCSI), and batching large updates so they don't escalate to a table lock.</p>
+<div class="say"><strong>Say this:</strong> "Locking enforces isolation, blocking is a session waiting on another's lock and is normal and brief, and a deadlock is mutual blocking where one is killed. Lock escalation converts thousands of row/page locks into a table lock past a threshold, which saves memory but serializes the table. I reduce it with good indexes, short transactions, RCSI, and batching big updates so they don't escalate."</div>
+`,
+
+"sql-server__why-with-nolock-is-dangerous": `
+<p class="lead"><code>WITH (NOLOCK)</code> is Read Uncommitted — it reads without taking shared locks, so it's fast and doesn't block, but it sees <strong>uncommitted data</strong>.</p>
+<div class="warn"><strong>The dangers:</strong> dirty reads (data that may roll back), <strong>missing or duplicated rows</strong> (a page split during your scan can skip or re-read rows), and inconsistent results — on real financial/report data this is a correctness bug, not just staleness.</div>
+<p>The right fix for "reads blocking writers" is <strong>RCSI</strong> (consistent, non-blocking snapshots), not NOLOCK.</p>
+<div class="say"><strong>Say this:</strong> "WITH (NOLOCK) is Read Uncommitted — no shared locks, so it's fast and non-blocking, but it reads uncommitted data. Worse than dirty reads, a page split mid-scan can make it skip or duplicate committed rows, so results are silently wrong. If the goal is readers not blocking writers, the correct fix is RCSI — consistent non-blocking snapshots — not NOLOCK."</div>
+`,
+
+"sql-server__deadlocks-detection-prevention": `
+<p class="lead">A deadlock is two sessions each holding a lock the other needs. SQL Server's deadlock monitor detects the cycle, picks the lowest-cost <strong>victim</strong>, and rolls it back with <strong>error 1205</strong> — so the app must catch and retry.</p>
+<h2>Prevention</h2>
+<ul>
+<li>Access tables/rows in a <strong>consistent order</strong> across all code paths.</li>
+<li>Keep transactions <strong>short</strong>; never wait on user input inside one.</li>
+<li>Index well so statements <strong>lock fewer rows</strong>; use RCSI to cut reader/writer conflicts.</li>
+</ul>
+<p>Capture deadlock graphs (Extended Events / system_health) to see the exact resources and queries involved.</p>
+<div class="say"><strong>Say this:</strong> "A deadlock is a lock cycle; SQL Server detects it, picks the cheapest victim, and rolls it back with error 1205, so the app retries. I prevent them with consistent object access order, short transactions, good indexes so fewer rows are locked, and RCSI to reduce reader-writer conflicts. I read the deadlock graph from Extended Events to see the exact resources involved."</div>
+`,
+
+"sql-server__tempdb-the-classic-contention-problem": `
+<p class="lead">TempDB is a single shared database used for temp tables, table variables, sorts/hash spills, version stores (RCSI/snapshot), and more. Under load, sessions contend on its <strong>allocation pages</strong> (GAM/SGAM/PFS), causing <code>PAGELATCH</code> waits.</p>
+<h2>The classic fix</h2>
+<ul>
+<li>Create <strong>multiple equally-sized data files</strong> (a common guideline: one per logical core up to 8) to spread allocation across files.</li>
+<li>Reduce temp-object churn and large sorts/spills; enough RAM to avoid spilling.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "TempDB is one shared database for temp tables, sorts, hash spills and the version store, so under load sessions contend on its allocation pages and you see PAGELATCH waits. The classic fix is multiple equally-sized tempdb data files — roughly one per core up to eight — to spread allocation, plus reducing temp-object churn and giving enough memory to avoid sort and hash spills."</div>
+`,
+
+"sql-server__temp-tables-vs-table-variables": `
+<p class="lead">Both hold intermediate results in tempdb, but the optimizer treats them differently.</p>
+<table>
+<tr><th></th><th>#Temp table</th><th>@Table variable</th></tr>
+<tr><td>Statistics</td><td>yes (good estimates)</td><td>none (estimates 1 row — until recent versions)</td></tr>
+<tr><td>Indexes</td><td>can add any</td><td>limited (PK/unique)</td></tr>
+<tr><td>Best for</td><td>larger sets, complex queries</td><td>small sets, simple operations</td></tr>
+</table>
+<p>For many rows, a <code>#temp</code> table's statistics give far better plans; a table variable's missing stats cause bad estimates and poor joins on large data.</p>
+<div class="say"><strong>Say this:</strong> "Both live in tempdb, but a #temp table has statistics and supports indexes, so the optimizer estimates it well and it suits larger, complex intermediate sets. A table variable has no statistics — it historically estimates one row — so on large data it produces bad plans. I use table variables for tiny sets and #temp tables when the row count or query complexity matters."</div>
+`,
+
+"sql-server__transaction-log-recovery-models": `
+<p class="lead">The <strong>transaction log</strong> records every change <em>before</em> it hits the data files (write-ahead logging) — the basis of rollback, crash recovery, and point-in-time restore.</p>
+<h2>Recovery models</h2>
+<ul>
+<li><strong>Simple:</strong> log auto-truncates; no log backups → no point-in-time restore. Dev/data-warehouse.</li>
+<li><strong>Full:</strong> everything logged; regular <em>log backups</em> let you restore to any point in time. Production OLTP.</li>
+<li><strong>Bulk-logged:</strong> minimal logging for bulk ops; limited PITR during those.</li>
+</ul>
+<p>In Full recovery you <strong>must</strong> take log backups or the log grows forever.</p>
+<div class="say"><strong>Say this:</strong> "The transaction log is write-ahead — every change is logged before the data pages change — which enables rollback, crash recovery and point-in-time restore. Simple recovery auto-truncates and gives no PITR; Full logs everything and, with regular log backups, restores to any moment — the production default; Bulk-logged minimizes logging for bulk ops. In Full recovery I must take log backups or the log grows without bound."</div>
+`,
+
+"sql-server__table-partitioning": `
+<p class="lead"><strong>Table partitioning</strong> splits one logical table into physical partitions by a key (usually a date range), while queries still see a single table.</p>
+<h2>What it buys you</h2>
+<ul>
+<li><strong>Partition elimination:</strong> queries filtered on the key scan only relevant partitions.</li>
+<li><strong>Fast data lifecycle:</strong> <code>SWITCH</code> a partition in/out instantly to load or archive/purge huge ranges (metadata-only, no row-by-row delete).</li>
+<li>Per-partition index maintenance.</li>
+</ul>
+<p>It's a <em>manageability and lifecycle</em> feature more than a raw-speed one — a good index often matters more for point queries.</p>
+<div class="say"><strong>Say this:</strong> "Partitioning splits a table physically by a key, usually a date, while it still looks like one table. The wins are partition elimination so key-filtered queries scan fewer partitions, and instant SWITCH to load or archive huge ranges as a metadata operation instead of a massive delete. It's mainly a manageability and data-lifecycle feature — for point queries a good index usually matters more."</div>
+`,
+
+"sql-server__fragmentation-rebuild-vs-reorganize-fill-factor": `
+<p class="lead">Index <strong>fragmentation</strong> is when the logical and physical page order diverge (from inserts/updates/page splits), hurting range scans.</p>
+<ul>
+<li><strong>REORGANIZE:</strong> online, lightweight, defragments the leaf level — for light fragmentation (~5–30%).</li>
+<li><strong>REBUILD:</strong> rebuilds the whole index (can be online in Enterprise), updates statistics — for heavy fragmentation (&gt;30%).</li>
+<li><strong>Fill factor:</strong> leaves free space on each page so inserts/updates don't immediately cause page splits — lower fill factor trades space for fewer splits on volatile indexes.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Fragmentation is pages out of physical order from splits, which slows range scans. I reorganize for light fragmentation — it's online and lightweight — and rebuild for heavy fragmentation, which also refreshes statistics. Fill factor leaves free space per page so volatile indexes split less often, trading some space for fewer page splits."</div>
+`,
+
+"sql-server__backups-full-diff-log-point-in-time-restore": `
+<p class="lead">Three backup types combine to give <strong>point-in-time restore</strong> with small RPO.</p>
+<ul>
+<li><strong>Full:</strong> the entire database — the baseline.</li>
+<li><strong>Differential:</strong> everything changed since the last full — fast to restore, shrinks the log chain to replay.</li>
+<li><strong>Log:</strong> all transactions since the last log backup (Full recovery only) — restoring these rolls forward to any exact moment.</li>
+</ul>
+<p>Restore sequence: full → latest diff → log backups up to the target time. <strong>Test your restores</strong> — an untested backup is not a backup.</p>
+<div class="say"><strong>Say this:</strong> "Full is the baseline, differential captures changes since the last full so restores are faster, and log backups capture every transaction since the last log backup, which lets me roll forward to any exact moment in Full recovery. Restore is full, then the latest differential, then the log chain to the target time. And I test restores — an untested backup isn't a backup."</div>
+`,
+
+"sql-server__ha-dr-always-on-fci-log-shipping": `
+<p class="lead">High availability and disaster recovery options, by scope.</p>
+<ul>
+<li><strong>Always On Availability Groups:</strong> replicate a set of databases to one or more replicas (sync or async) with automatic failover and readable secondaries — the modern primary choice for HA + DR + read scale.</li>
+<li><strong>Failover Cluster Instance (FCI):</strong> instance-level HA on shared storage — protects against node failure, but the storage is a single point.</li>
+<li><strong>Log shipping:</strong> periodically ship and restore log backups to a standby — simple, cheap DR with a larger RPO and manual failover.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Always On Availability Groups replicate databases to sync or async replicas with automatic failover and readable secondaries — the modern choice for HA, DR and read scale. A Failover Cluster Instance gives instance-level HA on shared storage but the storage is a single point. Log shipping periodically restores log backups to a standby — cheap DR with a bigger RPO and manual failover."</div>
+`,
+
+"sql-server__dmvs-wait-statistics-for-troubleshooting": `
+<p class="lead"><strong>DMVs</strong> (dynamic management views) expose live server internals; <strong>wait statistics</strong> tell you what SQL Server is <em>waiting on</em> — the fastest route to a bottleneck.</p>
+<ul>
+<li><code>sys.dm_os_wait_stats</code> — top wait types: <code>PAGEIOLATCH</code> (slow I/O), <code>LCK_</code> (blocking), <code>CXPACKET</code> (parallelism), <code>PAGELATCH</code> (tempdb/hot-page), <code>SOS_SCHEDULER_YIELD</code> (CPU pressure).</li>
+<li><code>sys.dm_exec_requests</code> / <code>sys.dm_exec_query_stats</code> — running and expensive queries.</li>
+<li><code>sys.dm_db_index_usage_stats</code> / missing-index DMVs — index tuning.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "DMVs expose live internals, and wait statistics are my fastest path to a bottleneck — they tell me what the server is waiting on. PAGEIOLATCH points to slow storage, LCK waits to blocking, CXPACKET to parallelism, PAGELATCH to tempdb or hot-page contention, SOS_SCHEDULER_YIELD to CPU pressure. Then I use the exec and index-usage DMVs to find the expensive queries and tune indexes."</div>
+`,
+
+"sql-server__set-based-operations-vs-cursors-rbar": `
+<p class="lead">SQL is <strong>set-based</strong> — express <em>what</em> you want and let the engine optimize the whole operation. A <strong>cursor</strong> processes row-by-row (RBAR — "row by agonizing row"), which is usually orders of magnitude slower.</p>
+<pre><code>-- RBAR: a cursor looping one update at a time  -> slow
+-- set-based: one statement the engine optimizes
+UPDATE Orders SET Discount = Total * 0.1 WHERE Total &gt; 1000;</code></pre>
+<p>Replace cursors with set-based statements, joins, window functions, or <code>MERGE</code>. Cursors are justified only for genuinely sequential logic (running admin tasks per database, some ETL).</p>
+<div class="say"><strong>Say this:</strong> "SQL is set-based — I say what I want in one statement and let the engine optimize it. A cursor processes row by row, RBAR, and is usually orders of magnitude slower. I replace cursors with set-based updates, joins, window functions or MERGE, and only keep a cursor for genuinely sequential work like per-database admin tasks."</div>
+`,
+
+"sql-server__merge-upserts": `
+<p class="lead"><code>MERGE</code> performs an <strong>upsert</strong> — insert, update, and/or delete in one statement based on whether a source row matches a target.</p>
+<pre><code>MERGE Target AS t USING Source AS s ON t.Id = s.Id
+WHEN MATCHED THEN UPDATE SET t.Val = s.Val
+WHEN NOT MATCHED THEN INSERT (Id, Val) VALUES (s.Id, s.Val);</code></pre>
+<div class="warn"><strong>Caution:</strong> MERGE has had subtle bugs and concurrency pitfalls over the years; many teams prefer an explicit <code>UPDATE</code> then <code>INSERT</code> (or <code>INSERT ... WHERE NOT EXISTS</code>) under proper locking/isolation for high-concurrency upserts.</div>
+<div class="say"><strong>Say this:</strong> "MERGE does an upsert — insert, update or delete in one statement based on a match condition — which is handy for sync/ETL. But it's had subtle correctness and concurrency bugs, so for high-concurrency upserts I often prefer an explicit UPDATE-then-INSERT, or INSERT WHERE NOT EXISTS, with the right locking and isolation."</div>
+`,
+
+"sql-server__identity-vs-sequence": `
+<p class="lead">Both generate surrogate keys. <code>IDENTITY</code> is a <em>column property</em> tied to one table; a <code>SEQUENCE</code> is a <em>standalone object</em> you can share across tables and read before inserting.</p>
+<ul>
+<li><strong>IDENTITY:</strong> simple, auto on insert, one per table.</li>
+<li><strong>SEQUENCE:</strong> get the next value with <code>NEXT VALUE FOR</code> before the insert, share one sequence across tables, cache/step options. More flexible.</li>
+</ul>
+<p>Both can leave gaps (rolled-back transactions, caching). Use IDENTITY for a plain table key; a SEQUENCE when you need the value up front or shared numbering.</p>
+<div class="say"><strong>Say this:</strong> "IDENTITY is a column property tied to one table and assigned on insert; a SEQUENCE is a standalone object I can read with NEXT VALUE FOR before inserting and share across tables. Both can leave gaps from rollbacks or caching. I use IDENTITY for a simple table key and a SEQUENCE when I need the value before the insert or shared numbering across tables."</div>
+`,
+
+"sql-server__scalar-udf-performance-inlining-2019": `
+<p class="lead">A <strong>scalar user-defined function</strong> used in a query historically ran <em>per row</em>, couldn't be optimized into the plan, and forced serial execution — a notorious hidden performance killer.</p>
+<p>SQL Server 2019 added <strong>scalar UDF inlining</strong>, which rewrites many scalar UDFs <em>into</em> the surrounding query so the optimizer can see and parallelize them — often a huge speedup with no code change. Not every UDF qualifies; where it doesn't, replace the UDF with an inline table-valued function or set-based logic.</p>
+<div class="say"><strong>Say this:</strong> "A scalar UDF in a query used to run per row, stay invisible to the optimizer, and force serial execution — a classic hidden killer. SQL Server 2019's scalar UDF inlining folds many of them into the query so the optimizer can parallelize them, often a big win with no change. Where a UDF doesn't qualify, I rewrite it as an inline table-valued function or set-based logic."</div>
+`,
+
+"sql-server__ctes-window-functions": `
+<p class="lead"><strong>CTEs</strong> (<code>WITH ...</code>) name a subquery for readability and enable <em>recursion</em> (hierarchies, graphs). <strong>Window functions</strong> compute across a set of rows <em>related to the current row</em> without collapsing them like GROUP BY.</p>
+<pre><code>-- running total & rank per customer, keeping every row
+SELECT *,
+  SUM(Total) OVER (PARTITION BY CustomerId ORDER BY CreatedAt) AS RunningTotal,
+  ROW_NUMBER() OVER (PARTITION BY CustomerId ORDER BY Total DESC) AS rn
+FROM Orders;</code></pre>
+<p>Window functions (<code>ROW_NUMBER</code>, <code>RANK</code>, <code>LAG</code>/<code>LEAD</code>, running aggregates) replace slow self-joins and cursors for ranking, de-duplication, and running totals.</p>
+<div class="say"><strong>Say this:</strong> "A CTE names a subquery for readability and enables recursion for hierarchies. Window functions compute over a window of related rows without collapsing them like GROUP BY — ROW_NUMBER, RANK, LAG/LEAD, running totals. I use them to replace slow self-joins and cursors for ranking, deduplication and running aggregates, with PARTITION BY and ORDER BY defining the window."</div>
+`,
+
+"sql-server__security-rls-tde-always-encrypted-roles": `
+<p class="lead">Layered SQL Server security features.</p>
+<ul>
+<li><strong>RLS (Row-Level Security):</strong> a predicate function filters rows per user automatically — enforce multi-tenant isolation <em>in the database</em>.</li>
+<li><strong>TDE (Transparent Data Encryption):</strong> encrypts data <em>at rest</em> (files + backups) transparently — protects stolen disks/backups, not live queries.</li>
+<li><strong>Always Encrypted:</strong> encrypts sensitive columns end-to-end — the engine never sees plaintext; keys live with the client. Protects against even a DBA/admin.</li>
+<li><strong>Roles &amp; least privilege:</strong> grant via roles, principle of least privilege, schemas for grouping.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "RLS filters rows per user with a predicate function, enforcing multi-tenant isolation in the database. TDE encrypts data at rest including backups but not live queries. Always Encrypted encrypts sensitive columns end-to-end so even the DBA never sees plaintext, with keys on the client. And I grant through roles with least privilege rather than to individual users."</div>
+`,
+
+"sql-server__json-support-in-sql-server": `
+<p class="lead">SQL Server stores JSON as text (<code>nvarchar</code>) with built-in functions to query and shape it — no dedicated JSON type (unlike Postgres JSONB).</p>
+<ul>
+<li><code>JSON_VALUE</code> (scalar), <code>JSON_QUERY</code> (object/array), <code>OPENJSON</code> (shred JSON into rows), <code>FOR JSON</code> (build JSON from a result set).</li>
+<li>Index JSON by computing a <strong>persisted computed column</strong> over <code>JSON_VALUE</code> and indexing that.</li>
+</ul>
+<p>Good for flexible/semi-structured attributes alongside relational data; for heavy JSON workloads a document store or Postgres JSONB is a better fit.</p>
+<div class="say"><strong>Say this:</strong> "SQL Server stores JSON as nvarchar with functions — JSON_VALUE and JSON_QUERY to read, OPENJSON to shred it into rows, FOR JSON to build it — but there's no native JSON type like Postgres JSONB. To index it I add a persisted computed column over JSON_VALUE and index that. It's fine for semi-structured attributes alongside relational data; for heavy JSON I'd use JSONB or a document store."</div>
+`,
+
+"postgresql__how-mvcc-works": `
+<p class="lead">Postgres uses <strong>MVCC</strong> (Multi-Version Concurrency Control): an update writes a <em>new row version</em> instead of overwriting, and each transaction sees a snapshot of the versions committed at its start.</p>
+<p>So <strong>readers never block writers and writers never block readers</strong> — they simply see different versions. Visibility is decided by transaction ids on each tuple (<code>xmin</code>/<code>xmax</code>). The cost: old versions (<em>dead tuples</em>) pile up until <code>VACUUM</code> reclaims them.</p>
+<div class="say"><strong>Say this:</strong> "Postgres uses MVCC — an update writes a new row version instead of overwriting, and each transaction sees a consistent snapshot of what was committed at its start. So readers never block writers and vice versa; they just see different versions. The cost is dead tuples left by updates and deletes, which VACUUM has to reclaim."</div>
+`,
+
+"postgresql__isolation-levels-serializable-ssi": `
+<p class="lead">Postgres offers Read Committed (default), Repeatable Read, and Serializable. Thanks to MVCC there are <strong>never dirty reads</strong> (Read Uncommitted behaves as Read Committed).</p>
+<ul>
+<li><strong>Repeatable Read</strong> = snapshot isolation: a stable snapshot for the whole transaction; prevents non-repeatable and phantom reads but still allows <em>write skew</em>.</li>
+<li><strong>Serializable</strong> uses <strong>SSI</strong> (Serializable Snapshot Isolation): it monitors for dangerous read/write dependency cycles and <em>aborts</em> a transaction to guarantee truly serial behavior — so it also prevents write skew.</li>
+</ul>
+<p>With Serializable you must be ready to catch a serialization failure and retry.</p>
+<div class="say"><strong>Say this:</strong> "Postgres has Read Committed as default, Repeatable Read which is snapshot isolation, and Serializable — and thanks to MVCC there are never dirty reads. Repeatable Read gives a stable snapshot but still allows write skew; Serializable uses SSI, detecting dangerous read-write dependency cycles and aborting one transaction to guarantee serializability. So with Serializable I catch a serialization failure and retry."</div>
+`,
+
+"postgresql__vacuum-autovacuum-table-bloat": `
+<p class="lead">Every update/delete leaves a <strong>dead tuple</strong> (old version). <code>VACUUM</code> reclaims that space for reuse, and <strong>autovacuum</strong> runs it automatically on change thresholds. If vacuuming can't keep up, tables and indexes <strong>bloat</strong> — wasted space and slower scans.</p>
+<p>VACUUM also maintains the <strong>visibility map</strong> (enabling index-only scans) and <strong>freezes</strong> old rows to prevent transaction-id wraparound. <code>VACUUM FULL</code> compacts and returns space to the OS but takes an exclusive lock.</p>
+<div class="say"><strong>Say this:</strong> "Every update or delete leaves a dead tuple, and VACUUM reclaims that space while autovacuum does it automatically on thresholds. If it can't keep up, tables and indexes bloat and scans slow. VACUUM also maintains the visibility map for index-only scans and freezes old rows to prevent wraparound. VACUUM FULL compacts and returns space to the OS but takes an exclusive lock, so I tune autovacuum aggressively on write-heavy tables instead."</div>
+`,
+
+"postgresql__transaction-id-wraparound": `
+<p class="lead">Postgres tracks row visibility with <strong>32-bit transaction ids</strong>, which wrap around after ~2 billion. Very old rows must be <strong>frozen</strong> (marked permanently visible) before the counter laps them — otherwise they could appear to be "in the future" and data would seem to vanish.</p>
+<p>Autovacuum does the freezing. If it falls far behind, Postgres warns, then forces aggressive vacuuming, and ultimately <strong>refuses new writes</strong> to protect data. Monitor the wraparound age (<code>age(datfrozenxid)</code>).</p>
+<div class="say"><strong>Say this:</strong> "Postgres tracks visibility with 32-bit transaction ids that wrap after about two billion, so very old rows must be frozen before the counter laps them, or data could appear to be from the future and vanish. Autovacuum does the freezing; if it falls far behind, Postgres escalates to forced vacuuming and finally stops accepting writes to protect the data. So I monitor the wraparound age and keep autovacuum healthy."</div>
+`,
+
+"postgresql__reading-explain-explain-analyze": `
+<p class="lead"><code>EXPLAIN</code> shows the planner's chosen plan with cost estimates (no execution); <code>EXPLAIN ANALYZE</code> actually runs it and shows real time and <strong>actual rows</strong> per node. Read it inside-out.</p>
+<h2>What to look for</h2>
+<ul>
+<li><strong>Estimated vs actual rows far apart</strong> → stale statistics (the root of many bad plans).</li>
+<li>A <code>Seq Scan</code> where an index seek is expected.</li>
+<li>Sorts or hashes <strong>spilling to disk</strong> ("external merge Disk" → raise <code>work_mem</code>).</li>
+<li>Add <code>BUFFERS</code> to see the I/O.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "EXPLAIN shows the chosen plan and estimates; EXPLAIN ANALYZE runs it and shows actual time and rows per node, which I read inside-out. I focus on estimated versus actual rows — a big gap means stale statistics driving a bad plan — then look for sequential scans where an index is expected, and sorts or hashes spilling to disk, adding BUFFERS to see the I/O."</div>
+`,
+
+"postgresql__statistics-the-planner-analyze": `
+<p class="lead">The Postgres planner is <strong>cost-based</strong> and relies on statistics collected by <code>ANALYZE</code> (run by autovacuum) — per-column histograms, most-common-values, and distinct counts — to estimate row counts and pick the cheapest plan.</p>
+<p>Stale stats → bad estimates → bad plans. After a big data load, run <code>ANALYZE</code>. When columns are <em>correlated</em> and the planner mis-estimates (it assumes independence), add <strong>extended statistics</strong> (<code>CREATE STATISTICS</code>), and raise the statistics target for skewed columns.</p>
+<div class="say"><strong>Say this:</strong> "The planner is cost-based and depends on statistics ANALYZE collects — histograms, most-common values, distinct counts — and autovacuum runs it. Stale stats give bad estimates and bad plans, so after a big load I run ANALYZE. When columns are correlated and the planner mis-estimates by assuming independence, I add extended statistics with CREATE STATISTICS, and raise the stats target for skewed columns."</div>
+`,
+
+"postgresql__index-types-b-tree-gin-gist-brin-when": `
+<p class="lead">Postgres has several index types — pick by data type and query shape.</p>
+<table>
+<tr><th>Type</th><th>Best for</th></tr>
+<tr><td><strong>B-tree</strong> (default)</td><td>equality & range on scalar, sortable — the workhorse</td></tr>
+<tr><td><strong>GIN</strong></td><td>inverted index for composite values: JSONB, arrays, full-text (containment)</td></tr>
+<tr><td><strong>GiST</strong></td><td>geometric, range, nearest-neighbor (PostGIS)</td></tr>
+<tr><td><strong>BRIN</strong></td><td>tiny index for huge, naturally-ordered tables (time-series, append-only)</td></tr>
+</table>
+<div class="say"><strong>Say this:</strong> "B-tree is the default workhorse for equality and range on scalar columns. GIN is an inverted index for JSONB, arrays and full-text — containment queries. GiST handles geometric, range and nearest-neighbor like PostGIS. BRIN is tiny and perfect for huge naturally-ordered tables like time-series. So I pick by data type — GIN for a JSONB containment filter, BRIN for an append-only log, B-tree for everything normal."</div>
+`,
+
+"postgresql__partial-expression-indexes": `
+<p class="lead">Two ways to make indexes smaller and more useful.</p>
+<ul>
+<li><strong>Partial index:</strong> a <code>WHERE</code> clause indexes only a subset (<code>CREATE INDEX ... WHERE active</code>) — small, and used when the query predicate matches.</li>
+<li><strong>Expression (functional) index:</strong> index the result of an expression (<code>CREATE INDEX ON t (lower(email))</code>) so a query using that expression (<code>WHERE lower(email) = ...</code>) can seek instead of scan.</li>
+</ul>
+<p>Both keep indexes lean and make otherwise non-sargable queries fast — the index just has to match the query's predicate/expression exactly.</p>
+<div class="say"><strong>Say this:</strong> "A partial index indexes only a subset via a WHERE clause — like only active rows — keeping it small and used when the query matches. An expression index indexes a function result like lower(email), so a query filtering on lower(email) can seek instead of scan. Both keep indexes lean and make non-sargable queries fast — the index just has to match the query's predicate or expression."</div>
+`,
+
+"postgresql__covering-indexes-index-only-scans": `
+<p class="lead">An <strong>index-only scan</strong> answers a query entirely from the index without touching the heap — fast. Postgres 11+ supports <code>INCLUDE</code> columns to make an index covering.</p>
+<div class="warn"><strong>The MVCC catch:</strong> Postgres must still verify tuple visibility, so an index-only scan only triggers when the <strong>visibility map</strong> marks the page all-visible — which <code>VACUUM</code> maintains. So good vacuuming is required for index-only scans to actually happen.</div>
+<div class="say"><strong>Say this:</strong> "An index-only scan answers the query from the index without touching the table, and INCLUDE columns make an index covering. But because of MVCC, Postgres has to confirm visibility, so an index-only scan only kicks in when the visibility map marks the page all-visible — which VACUUM maintains. In practice I need good vacuuming for index-only scans to fire."</div>
+`,
+
+"postgresql__hot-updates-fillfactor": `
+<p class="lead">Normally an update writes a new tuple and must update <em>every</em> index pointing at the row. A <strong>HOT (Heap-Only Tuple) update</strong> — when <em>no indexed column changed</em> and there's room on the same page — writes the new version on that page with a pointer chain and <strong>skips the index updates</strong>, reducing bloat and write amplification.</p>
+<p>Lower a table's <code>fillfactor</code> (leave free space per page) to make HOT updates more likely on update-heavy tables.</p>
+<div class="say"><strong>Say this:</strong> "Normally an update creates a new tuple and updates every index. A HOT update happens when no indexed column changed and there's free space on the same page: Postgres writes the new version there and skips the index updates, cutting bloat and write amplification. I encourage it on update-heavy tables by lowering fillfactor so each page keeps room for new versions."</div>
+`,
+
+"postgresql__json-vs-jsonb": `
+<p class="lead"><code>json</code> stores the exact input text (preserving whitespace, key order, duplicates) and reparses it each access. <code>jsonb</code> stores a <strong>decomposed binary</strong> form — slightly slower to insert, but much faster to query, and crucially <strong>indexable (GIN)</strong> with operators like containment.</p>
+<pre><code>-- jsonb containment, GIN-indexable
+WHERE data @&gt; '{"status":"active"}'</code></pre>
+<p>Use <code>jsonb</code> for anything you'll filter or index on; use plain <code>json</code> only when you must preserve the exact input text. <code>jsonb</code> is the default choice.</p>
+<div class="say"><strong>Say this:</strong> "json stores the raw text and reparses it each access; jsonb stores a decomposed binary form that's a touch slower to write but much faster to query and, crucially, indexable with GIN and queryable with operators like containment. I use jsonb for anything I'll filter or index, and plain json only when I must preserve the exact input text."</div>
+`,
+
+"postgresql__toast-arrays-composite-types": `
+<p class="lead"><strong>TOAST</strong> (The Oversized-Attribute Storage Technique) transparently compresses and/or stores large field values (big <code>text</code>, <code>jsonb</code>, <code>bytea</code>) <em>out-of-line</em> in a separate table once a row exceeds ~2KB — so big columns don't bloat the main table's pages.</p>
+<p>Postgres also has first-class <strong>arrays</strong> (<code>int[]</code>, <code>text[]</code>) and <strong>composite/row types</strong> — handy for denormalized attributes and indexable with GIN — but they complicate querying, so use them judiciously.</p>
+<div class="say"><strong>Say this:</strong> "TOAST is how Postgres handles large values — big text, jsonb or bytea get compressed and stored out-of-line in a separate table once a row passes about 2KB, so they don't bloat the main pages. Postgres also has first-class arrays and composite types, which are handy for denormalized attributes and GIN-indexable, but I use them judiciously because they complicate querying."</div>
+`,
+
+"postgresql__row-locks-advisory-locks-skip-locked": `
+<p class="lead"><code>SELECT ... FOR UPDATE</code> takes pessimistic row locks (with <code>FOR NO KEY UPDATE</code>/<code>FOR SHARE</code> variants). <code>FOR UPDATE SKIP LOCKED</code> <strong>skips rows already locked</strong> by others — the clean way to build a concurrent job queue, since each worker claims a different unlocked row with no contention.</p>
+<p><strong>Advisory locks</strong> (<code>pg_advisory_lock</code>) are application-defined locks not tied to any row — use them for app-level mutual exclusion, like ensuring a job runs once across sessions.</p>
+<div class="say"><strong>Say this:</strong> "SELECT FOR UPDATE takes pessimistic row locks, and FOR UPDATE SKIP LOCKED skips rows already locked — the clean way to build a concurrent job queue, since each worker claims a different unlocked row with no waiting. Advisory locks are application-level locks not tied to a row, via pg_advisory_lock, which I use for app-level mutual exclusion like making a job run once."</div>
+`,
+
+"postgresql__deadlocks-in-postgres": `
+<p class="lead">A deadlock is two transactions each holding a lock the other needs. Postgres's detector (after <code>deadlock_timeout</code>) aborts one with SQLSTATE <strong>40P01</strong> (<code>deadlock_detected</code>) — so the application retries.</p>
+<h2>Prevention</h2>
+<ul>
+<li>Consistent lock ordering across all code paths.</li>
+<li>Short transactions; appropriate indexes (lock fewer rows).</li>
+<li><code>FOR UPDATE SKIP LOCKED</code> for queues so workers never wait on each other.</li>
+</ul>
+<p>Postgres logs the deadlock with the statements involved.</p>
+<div class="say"><strong>Say this:</strong> "Postgres deadlocks like any database — two transactions each holding a lock the other needs — and its detector aborts one after deadlock_timeout with SQLSTATE 40P01, so the app retries. I prevent them with consistent lock ordering, short transactions and good indexes, and for queues I use FOR UPDATE SKIP LOCKED so workers never wait on each other. Postgres logs the deadlock with the statements involved."</div>
+`,
+
+"postgresql__pgbouncer-connection-pooling-tuning": `
+<p class="lead">Each Postgres connection is a full <strong>OS process</strong> (several MB), and Postgres doesn't multiplex — so thousands of app connections overwhelm it. <strong>PgBouncer</strong> is a lightweight external pooler that multiplexes many client connections onto a small pool of server connections.</p>
+<ul>
+<li><strong>Transaction mode</strong> (reuse a server connection per transaction) is the usual choice for web apps — with caveats around prepared statements and session state.</li>
+<li>Session mode (1:1) and statement mode also exist.</li>
+</ul>
+<p>Keep <code>max_connections</code> modest and let PgBouncer pool — essential for serverless/high-connection workloads.</p>
+<div class="say"><strong>Say this:</strong> "Each Postgres connection is a full OS process, so it doesn't scale to thousands of app connections. PgBouncer multiplexes many clients onto a small set of server connections — transaction mode is the usual web choice, with caveats around prepared statements and session state. So I keep Postgres max_connections modest and put PgBouncer in front, which is essential for serverless or high-connection workloads."</div>
+`,
+
+"postgresql__key-memory-tuning-parameters": `
+<p class="lead">The tuning parameters worth knowing:</p>
+<ul>
+<li><strong>shared_buffers</strong> — Postgres's cache (~25% of RAM).</li>
+<li><strong>work_mem</strong> — per-operation memory for sorts/hashes. Too low spills to disk; too high times many connections risks OOM.</li>
+<li><strong>maintenance_work_mem</strong> — for VACUUM and index builds.</li>
+<li><strong>effective_cache_size</strong> — the planner's estimate of total cache; nudges it toward index scans.</li>
+</ul>
+<p><code>work_mem</code> is the common lever when sorts or hash joins spill to disk.</p>
+<div class="say"><strong>Say this:</strong> "The key ones: shared_buffers is Postgres's cache, around 25% of RAM; work_mem is per-operation memory for sorts and hashes, where too low spills to disk and too high times many connections risks OOM; maintenance_work_mem speeds VACUUM and index builds; and effective_cache_size tells the planner how much cache exists, nudging it toward index scans. work_mem is the usual lever when sorts spill to disk."</div>
+`,
+
+"postgresql__wal-checkpoints-durability": `
+<p class="lead"><strong>Write-Ahead Logging:</strong> every change is written to the WAL <em>before</em> the data pages, and a commit <code>fsync</code>s the WAL — so after a crash Postgres replays it to recover committed transactions. That's durability.</p>
+<p><strong>Checkpoints</strong> periodically flush dirty pages to the data files and recycle WAL; tune them (<code>checkpoint_timeout</code>, <code>max_wal_size</code>) to spread the I/O. <code>synchronous_commit = off</code> trades a tiny durability window for faster commits. The WAL also drives replication and PITR.</p>
+<div class="say"><strong>Say this:</strong> "Write-ahead logging means every change hits the WAL before the data pages, and a commit fsyncs the WAL, so after a crash Postgres replays it to recover committed work — that's durability. Checkpoints periodically flush dirty pages and recycle WAL, and I tune them to spread that I/O. Turning synchronous_commit off trades a tiny durability window for throughput, and the WAL also drives replication and point-in-time recovery."</div>
+`,
+
+"postgresql__backups-pg-dump-vs-physical-pitr": `
+<p class="lead">Two backup approaches with different strengths.</p>
+<ul>
+<li><strong>pg_dump (logical):</strong> a portable SQL/custom-format dump of a database — version-flexible, can restore individual objects, good for migrations. But slow on huge databases and only a point-in-time <em>snapshot</em>.</li>
+<li><strong>Physical (pg_basebackup) + archived WAL:</strong> a copy of the data files plus WAL enables <strong>Point-In-Time Recovery</strong> — restore the base and replay WAL to any exact moment. Fast for large clusters, whole-cluster.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "pg_dump is a logical backup — a portable dump good for migrations and restoring individual objects but slow on huge databases and only a snapshot. A physical backup with pg_basebackup plus archived WAL enables point-in-time recovery: restore the base and replay WAL to any exact moment, which is fast for large clusters. So small databases use pg_dump, large production uses physical plus WAL archiving for PITR."</div>
+`,
+
+"postgresql__streaming-physical-vs-logical-replication": `
+<p class="lead">Two replication models.</p>
+<ul>
+<li><strong>Streaming (physical):</strong> ships WAL to standby servers that replay it → byte-identical, whole-cluster replicas for HA and read scaling. Same version, standby is read-only.</li>
+<li><strong>Logical (publications/subscriptions):</strong> decodes WAL into <em>row-level</em> changes replicated per table → selective, cross-version, different schema on the subscriber, and the subscriber is <strong>writable</strong>. Used for migrations, partial replication, and change-data-capture.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Physical streaming replication ships the WAL to standbys that replay it, giving byte-identical whole-cluster replicas for HA and read scaling — same version, read-only standby. Logical replication decodes WAL into row-level changes published per table, so it's selective, works across versions and schemas, and the subscriber is writable — ideal for migrations, partial replication and change-data-capture into other systems."</div>
+`,
+
+"postgresql__declarative-table-partitioning": `
+<p class="lead">Postgres 10+ has native <strong>declarative partitioning</strong>: a parent table partitioned <code>BY RANGE</code> / <code>LIST</code> / <code>HASH</code> into child partitions, while queries still see one table.</p>
+<ul>
+<li><strong>Partition pruning:</strong> queries filtered on the partition key scan only relevant partitions.</li>
+<li><strong>Attach/detach</strong> partitions for fast bulk load and archiving.</li>
+<li>Indexes and constraints defined on the parent propagate to partitions.</li>
+</ul>
+<p>Ideal for large time-series partitioned by date with a retention policy — just detach and drop old partitions.</p>
+<div class="say"><strong>Say this:</strong> "Postgres has native declarative partitioning — a parent partitioned by range, list or hash into child tables. Queries filtered on the partition key get pruning so they scan fewer partitions, and I can attach or detach partitions for fast bulk load and archiving. It's ideal for large time-series by date with a retention policy, where I just detach and drop old partitions."</div>
+`,
+
+"postgresql__create-index-concurrently-safe-online-changes": `
+<p class="lead">A normal <code>CREATE INDEX</code> takes a lock that <strong>blocks writes</strong> to the table — unacceptable in production. <code>CREATE INDEX CONCURRENTLY</code> builds the index <em>without</em> blocking writes (two passes, slower, can't run in a transaction, and leaves an <code>INVALID</code> index to drop if it fails).</p>
+<p>Schema changes need the same care: add constraints as <code>NOT VALID</code> then <code>VALIDATE</code> separately (short lock), and know which column changes rewrite the whole table versus which are metadata-only in recent Postgres.</p>
+<div class="say"><strong>Say this:</strong> "A plain CREATE INDEX locks the table against writes, so in production I use CREATE INDEX CONCURRENTLY, which builds it without blocking writes — slower, can't run in a transaction, and leaves an invalid index to drop if it fails. For schema changes I add constraints as NOT VALID then VALIDATE separately to avoid long locks, and I know which column changes rewrite the table versus which are metadata-only."</div>
+`,
+
+"postgresql__upsert-insert-on-conflict": `
+<p class="lead">Postgres's native upsert is <strong><code>INSERT ... ON CONFLICT</code></strong> — atomic and concurrency-safe because it keys off a unique index, so there's no race like a separate SELECT then INSERT.</p>
+<pre><code>INSERT INTO counters(id, n) VALUES (@id, 1)
+ON CONFLICT (id) DO UPDATE SET n = counters.n + EXCLUDED.n;</code></pre>
+<p>The <code>EXCLUDED</code> pseudo-table references the proposed row; target a unique or primary key (or <code>DO NOTHING</code> to ignore). It's the clean, correct way to do insert-or-update under concurrency.</p>
+<div class="say"><strong>Say this:</strong> "Postgres upsert is INSERT ... ON CONFLICT (key) DO UPDATE, or DO NOTHING — atomic and concurrency-safe because it keys off a unique index, so there's no race like a separate SELECT then INSERT. I reference the proposed row via the EXCLUDED pseudo-table. It's the clean, correct way to do insert-or-update under concurrency."</div>
+`,
+
+"postgresql__the-returning-clause": `
+<p class="lead"><code>RETURNING</code> makes <code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code> return the affected rows (any columns) in the <em>same</em> statement — get the generated id, the new values, or the deleted rows without a second query.</p>
+<p>It saves a round-trip and avoids a race between the write and a follow-up read. Combined with CTEs it enables atomic patterns — like moving rows from one table to another in a single statement (<code>WITH deleted AS (DELETE ... RETURNING *) INSERT INTO archive SELECT * FROM deleted</code>).</p>
+<div class="say"><strong>Say this:</strong> "RETURNING makes INSERT, UPDATE and DELETE return the affected rows in the same statement — I get the generated id or new values without a second query, saving a round-trip and avoiding a race with a follow-up read. Combined with CTEs it enables atomic patterns like moving rows from one table to an archive in a single statement."</div>
+`,
+
+"postgresql__serial-vs-identity-vs-sequences": `
+<p class="lead">All three generate auto-increment keys via sequences.</p>
+<ul>
+<li><strong>SERIAL:</strong> the old pseudo-type (creates a sequence + default) — works, but sequence ownership and permissions are awkward.</li>
+<li><strong>IDENTITY</strong> (<code>GENERATED ... AS IDENTITY</code>, SQL-standard, PG 10+): the modern recommended way — cleaner, standard, better control. Use it for new tables.</li>
+<li><strong>Sequences directly</strong> (<code>nextval</code>): when you need the value <em>before</em> insert, or shared numbering across tables.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "They all use sequences under the hood. SERIAL is the old pseudo-type with awkward ownership and permissions. IDENTITY — GENERATED BY DEFAULT AS IDENTITY — is the modern SQL-standard way and what I use for new tables. I use a raw sequence with nextval when I need the value before the insert or shared numbering across tables."</div>
+`,
+
+"postgresql__ctes-the-materialization-fence": `
+<p class="lead">A CTE (<code>WITH</code>) names a subquery. Historically in Postgres a CTE was an <strong>optimization fence</strong> — always materialized once into a temp result, which could block predicate push-down and hurt performance.</p>
+<p>Postgres 12+ <strong>inlines</strong> simple CTEs by default (referenced once, no side effects); you can force behavior with <code>MATERIALIZED</code> / <code>NOT MATERIALIZED</code>. <code>WITH RECURSIVE</code> handles hierarchies and graphs.</p>
+<div class="say"><strong>Say this:</strong> "A CTE names a subquery, but historically in Postgres it was an optimization fence — always materialized once, which could stop the planner pushing predicates down and hurt performance. Postgres 12+ inlines simple CTEs by default, and I can override with MATERIALIZED or NOT MATERIALIZED. I still use WITH RECURSIVE for hierarchies, but I'm aware of the fence behavior by version."</div>
+`,
+
+"postgresql__window-functions-distinct-on": `
+<p class="lead"><strong>Window functions</strong> compute over related rows without collapsing them — <code>OVER (PARTITION BY ... ORDER BY ...)</code> for ranking, running totals, <code>LAG</code>/<code>LEAD</code>.</p>
+<p><strong><code>DISTINCT ON</code></strong> is a Postgres-specific shortcut: <code>SELECT DISTINCT ON (key) ... ORDER BY key, tiebreaker</code> returns the <em>first row per group</em> — e.g. the latest row per customer — concisely, often faster than a window-function-plus-filter or a correlated subquery.</p>
+<pre><code>SELECT DISTINCT ON (customer_id) *
+FROM orders ORDER BY customer_id, created_at DESC;   -- latest order per customer</code></pre>
+<div class="say"><strong>Say this:</strong> "Window functions compute over a window of related rows without collapsing them — ROW_NUMBER, running totals, LAG/LEAD with PARTITION BY. DISTINCT ON is a neat Postgres shortcut: DISTINCT ON (customer_id) ORDER BY customer_id, created_at DESC gives the latest row per customer in one query, often faster than a window-function-plus-filter or a correlated subquery."</div>
+`,
+
+"postgresql__full-text-search": `
+<p class="lead">Postgres has built-in <strong>full-text search</strong>: <code>to_tsvector</code> turns a document into normalized lexemes, <code>to_tsquery</code> the search terms, and the <code>@@</code> operator matches them — with language configs for stemming and stop words.</p>
+<p>Store a <code>tsvector</code> (often a generated column) and index it with <strong>GIN</strong> for fast search; rank with <code>ts_rank</code>. Good for moderate search needs without a separate engine; for large-scale, relevance-heavy search a dedicated engine (Elasticsearch) wins.</p>
+<div class="say"><strong>Say this:</strong> "Postgres has built-in full-text search — to_tsvector turns a document into normalized lexemes, to_tsquery the terms, and @@ matches them, with language configs for stemming. I store a tsvector generated column, index it with GIN for speed, and rank with ts_rank. It's great for moderate search without standing up Elasticsearch, though a dedicated engine wins for large-scale relevance-heavy search."</div>
+`,
+
+"postgresql__extensions-you-should-know": `
+<p class="lead">Postgres is hugely extensible — the extensions worth knowing:</p>
+<ul>
+<li><strong>pg_stat_statements</strong> — aggregate query performance stats; the number-one tuning tool.</li>
+<li><strong>pg_trgm</strong> — trigram similarity / fuzzy search, plus GIN index for <code>LIKE '%x%'</code>.</li>
+<li><strong>PostGIS</strong> — geospatial; <strong>pgcrypto</strong> — hashing/encryption.</li>
+<li><strong>postgres_fdw</strong> — query foreign databases; <strong>pgvector</strong> — vector similarity search for embeddings/AI.</li>
+<li><strong>Citus</strong> / <strong>TimescaleDB</strong> — scaling and time-series.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Postgres is hugely extensible. The one I always enable is pg_stat_statements for query performance stats — the top tuning tool. Then pg_trgm for fuzzy and wildcard search with a GIN index, PostGIS for geospatial, pgcrypto for hashing, postgres_fdw to query foreign databases, and increasingly pgvector for embedding similarity in AI apps. Citus and TimescaleDB extend it for scaling and time-series."</div>
+`,
+
+"postgresql__listen-notify-built-in-pub-sub": `
+<p class="lead">Postgres has lightweight built-in pub/sub: <code>NOTIFY channel, 'payload'</code> sends a notification (delivered on <strong>commit</strong>), and sessions that <code>LISTEN channel</code> receive it.</p>
+<p>Great for waking a worker when a job row is inserted (often paired with a <code>SKIP LOCKED</code> queue), or for cache invalidation.</p>
+<div class="warn"><strong>Caveats:</strong> it's fire-and-forget — a disconnected listener <em>misses</em> the message (not durable) — and the payload is small (~8KB). For durable messaging, use a real broker.</div>
+<div class="say"><strong>Say this:</strong> "Postgres has built-in pub/sub with LISTEN and NOTIFY — a session notifies a channel with a small payload on commit, and listening sessions receive it. I use it to wake a worker when a job row is inserted, often with a SKIP LOCKED queue, or for cache invalidation. But it's transactional fire-and-forget — a disconnected listener misses the message — so for durable messaging I'd still use a real broker."</div>
+`,
 };
