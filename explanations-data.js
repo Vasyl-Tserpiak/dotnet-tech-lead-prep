@@ -3857,4 +3857,208 @@ FROM orders ORDER BY customer_id, created_at DESC;   -- latest order per custome
 </ul>
 <div class="say"><strong>Say this:</strong> "A campaign engine runs a multi-step state machine per recipient — triggers, send actions, timed waits, and branches on behavior. I store each recipient's instance state durably, use a job scheduler for the timed waits, execute actions through a queue to providers, and feed events like opens and clicks back to advance branches. It has to be durable and resumable — a saga per recipient that survives restarts — idempotent so no one is emailed twice, and multi-tenant with isolation, partitioned by recipient and tenant at scale. It ties together durable state, a queue for actions, scheduling, idempotency and multi-tenancy — the crux is a resumable per-recipient state machine with exactly-once actions."</div>
 `,
+
+"authentication-authorization__oauth2-vs-oidc-vs-saml": `
+<p class="lead">Three protocols, easily confused.</p>
+<ul>
+<li><strong>OAuth2</strong> — an <em>authorization</em> framework: delegated access to resources via <strong>access tokens</strong> ("what you can do"). Not about identity.</li>
+<li><strong>OIDC (OpenID Connect)</strong> — an <em>identity</em> layer on top of OAuth2: adds an <strong>id_token</strong> (a JWT of user claims) and a userinfo endpoint ("who you are" — authentication).</li>
+<li><strong>SAML</strong> — older XML-based enterprise SSO; does both authN and authZ via XML assertions.</li>
+</ul>
+<p>Modern apps: OIDC for user login, OAuth2 for API access; SAML where enterprise SSO still requires it. OIDC is JSON/mobile-friendly; SAML is XML and heavier.</p>
+<div class="say"><strong>Say this:</strong> "OAuth2 is an authorization framework — delegated access via access tokens, about what you can do, not who you are. OIDC adds an identity layer with an id_token JWT that authenticates the user. SAML is the older XML-based enterprise SSO that does both via assertions. So I use OIDC for login and OAuth2 for API access, and SAML where enterprise SSO requires it. OIDC is JSON and mobile-friendly; SAML is XML and heavier."</div>
+`,
+
+"authentication-authorization__authorization-code-pkce": `
+<p class="lead">The standard, most secure OAuth2 flow for any app with a <em>user</em> — web, SPA, or mobile.</p>
+<h2>Flow</h2>
+<p>App redirects the user to the authorization server → user authenticates → server redirects back with a short-lived <strong>authorization code</strong> → app exchanges the code (plus a client secret for confidential clients) for tokens at the token endpoint. Tokens never appear in the browser URL.</p>
+<h2>PKCE (Proof Key for Code Exchange)</h2>
+<p>The client generates a random <code>code_verifier</code>, sends its hash (<code>code_challenge</code>) in the initial request, and the plaintext verifier at the token exchange — so an <strong>intercepted code is useless</strong> without the verifier. Now recommended for <em>all</em> clients (originally for public clients that can't hold a secret).</p>
+<div class="say"><strong>Say this:</strong> "Authorization Code with PKCE is the standard flow for any app with a user. The app redirects to the auth server to log in, gets a short-lived authorization code, and exchanges it for tokens at the token endpoint, so tokens never ride in the browser URL. PKCE adds a code verifier whose hash is sent up front and whose plaintext is required at the exchange, so an intercepted code is useless without it. It's now recommended for all clients."</div>
+`,
+
+"authentication-authorization__client-credentials": `
+<p class="lead">The OAuth2 flow for <strong>machine-to-machine</strong> — a service authenticates as <em>itself</em>, no user involved.</p>
+<p>The client sends its <strong>client id + secret</strong> (or a certificate) to the token endpoint and gets an access token directly — no redirect, no refresh token. The token carries the app's identity and scopes/roles.</p>
+<p>Used for backend services, daemons, and cron jobs calling APIs. Secure the secret in Key Vault; in <strong>Azure, prefer managed identity</strong> — the passwordless version with no secret to manage.</p>
+<div class="say"><strong>Say this:</strong> "Client Credentials is the machine-to-machine flow — a service authenticates as itself, no user. It sends its client id and secret or certificate to the token endpoint and gets an access token directly, no redirect or refresh token, and the token carries the app's identity and scopes. I use it for backend daemons and jobs calling APIs, keep the secret in Key Vault, and in Azure prefer managed identity, which is passwordless with no secret to manage."</div>
+`,
+
+"authentication-authorization__on-behalf-of-obo": `
+<p class="lead">Used when an API needs to call a <em>downstream</em> API <strong>as the signed-in user</strong>, not as itself.</p>
+<p>The middle API receives the user's access token, then <strong>exchanges it</strong> (the OBO flow) at the token endpoint for a new token scoped to the downstream API — preserving the user's identity and permissions through the chain (API A → API B acts with the user's delegated permissions).</p>
+<p>Use OBO when the downstream must enforce <strong>per-user</strong> authorization; if it only needs the app's identity, client credentials is simpler.</p>
+<div class="say"><strong>Say this:</strong> "On-Behalf-Of is for when an API calls a downstream API as the signed-in user, not as itself. The middle API takes the user's access token and exchanges it at the token endpoint for a new token scoped to the downstream API, preserving the user's identity and permissions through the chain. I use it when the downstream must enforce per-user authorization; if it only needs the app's identity, client credentials is simpler."</div>
+`,
+
+"authentication-authorization__device-authorization-device-code": `
+<p class="lead">The OAuth2 flow for <strong>input-constrained devices</strong> — smart TVs, CLIs, IoT — that can't easily show a browser or type.</p>
+<h2>Flow</h2>
+<p>The device requests a device code + <strong>user code</strong> and displays "go to <code>example.com/device</code> and enter CODE-1234"; meanwhile it <strong>polls</strong> the token endpoint. The user authenticates and approves on their phone/laptop; the device's next poll returns the tokens.</p>
+<p>It decouples the login from the constrained device — it's how CLI tools (<code>az login</code>) and TV apps sign you in.</p>
+<div class="say"><strong>Say this:</strong> "The Device Authorization flow is for input-constrained devices like smart TVs, CLIs and IoT. The device gets a user code and tells you to visit a URL and enter it, while it polls the token endpoint. You authenticate and approve on your phone, and the device's next poll returns the tokens. It decouples the login from the constrained device — it's how CLI tools and TV apps sign you in."</div>
+`,
+
+"authentication-authorization__refresh-tokens-rotation": `
+<p class="lead">Access tokens are <strong>short-lived</strong> (minutes) to limit exposure; a <strong>refresh token</strong> (long-lived) lets the client get a new access token without re-prompting the user — silent renewal.</p>
+<div class="warn"><strong>A stolen refresh token is powerful, so rotate them.</strong> Each use issues a <em>new</em> refresh token and invalidates the old (refresh token rotation). With <strong>reuse detection</strong>: if an already-rotated token is presented, that signals theft → revoke the whole token family.</div>
+<p>Store refresh tokens securely — ideally an httpOnly cookie or secure storage, not <code>localStorage</code>.</p>
+<div class="say"><strong>Say this:</strong> "Access tokens are short-lived to limit exposure, and a refresh token gets a new one without re-prompting. Because a stolen refresh token is powerful, I rotate them: each use issues a new one and invalidates the old, with reuse detection — if an already-rotated token shows up, that signals theft and I revoke the whole family. I store them securely, ideally an httpOnly cookie rather than localStorage."</div>
+`,
+
+"authentication-authorization__implicit-ropc-know-why-they-re-deprecated": `
+<p class="lead">Two legacy OAuth2 flows now discouraged.</p>
+<ul>
+<li><strong>Implicit flow:</strong> returned the access token directly in the browser <em>URL fragment</em> (no code exchange) — built for SPAs before PKCE, but it leaks tokens into the URL, history and logs and has no refresh token. Replaced by <strong>Authorization Code + PKCE</strong>.</li>
+<li><strong>ROPC (Resource Owner Password Credentials):</strong> the app collects the user's <em>username + password directly</em> and sends them to the token endpoint — which defeats the point of OAuth, breaks SSO/MFA/federation, and lets the app see the password. Only for legacy migration.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Implicit and ROPC are legacy flows I avoid. Implicit returned the access token straight in the browser URL fragment — it was for SPAs before PKCE, but it leaks tokens into the URL and history and has no refresh token, so Authorization Code with PKCE replaced it. ROPC has the app collect the user's password and send it to the token endpoint, which defeats OAuth's point and breaks SSO and MFA — only for legacy migration. For anything new it's Authorization Code with PKCE."</div>
+`,
+
+"authentication-authorization__jwt-tokens-cookies-validation-sig-iss-aud-exp-key-rotation": `
+<p class="lead">A JWT is a signed token — <code>header.payload.signature</code> (base64url) — carrying claims. <strong>Validate every one.</strong></p>
+<ul>
+<li>Verify the <strong>signature</strong> against the issuer's public key (from the JWKS endpoint); never trust <code>alg=none</code>.</li>
+<li>Check <strong>issuer</strong> (iss), <strong>audience</strong> (aud — this token is for <em>my</em> API), <strong>expiry</strong> (exp) and not-before (nbf).</li>
+<li><strong>Key rotation:</strong> the <code>kid</code> header selects the signing key; fetch JWKS and cache with refresh.</li>
+</ul>
+<h2>Tokens vs cookies</h2>
+<p>A <strong>bearer JWT</strong> in the Authorization header is stateless (great for APIs/mobile) but XSS can steal it; an <strong>httpOnly secure cookie</strong> is protected from JavaScript but needs CSRF protection.</p>
+<div class="say"><strong>Say this:</strong> "A JWT is a signed header-payload-signature token, and I validate every part: verify the signature against the issuer's public key from JWKS, and check issuer, audience and expiry — never trust alg=none. For key rotation the kid header picks the key and I cache JWKS with refresh. On storage: a bearer JWT in the header is stateless and great for APIs but XSS can steal it, while an httpOnly cookie is protected from JavaScript but needs CSRF protection."</div>
+`,
+
+"authentication-authorization__rbac-abac-claims-scopes": `
+<p class="lead">Four authorization concepts.</p>
+<ul>
+<li><strong>RBAC (role-based):</strong> permissions grouped into roles, users assigned roles (Admin, Editor) — simple, coarse, common.</li>
+<li><strong>ABAC (attribute-based):</strong> decisions from attributes of user/resource/context (ownership, department, time, clearance) — fine-grained but needs a policy engine.</li>
+<li><strong>Claims:</strong> assertions about the user in the token (role, tenant, permissions) — the raw material for decisions.</li>
+<li><strong>Scopes:</strong> OAuth2 — what an access token may do (<code>api.read</code>, <code>api.write</code>) — delegated API permissions, consented by the user.</li>
+</ul>
+<p>In ASP.NET I use <strong>policy-based authorization</strong> over claims rather than hardcoded role checks.</p>
+<div class="say"><strong>Say this:</strong> "RBAC groups permissions into roles users are assigned — simple and coarse. ABAC decides from attributes like ownership, department or time — fine-grained but needs a policy engine. Claims are the assertions in the token — role, tenant, permissions — the raw material for decisions. Scopes are OAuth's delegated API permissions like api.read, consented by the user. In ASP.NET I use policy-based authorization over claims rather than hardcoded role checks, combining coarse roles with finer policies."</div>
+`,
+
+"application-security__owasp-top-10-the-categories": `
+<p class="lead">The OWASP Top 10 is the standard list of the most critical web-app security risks — a checklist for threat modeling and review.</p>
+<ol>
+<li><strong>Broken Access Control</strong> — #1: missing/broken authorization, IDOR.</li>
+<li>Cryptographic Failures — weak/no encryption, exposed data.</li>
+<li>Injection — SQLi, XSS, command injection.</li>
+<li>Insecure Design.</li>
+<li>Security Misconfiguration — defaults, verbose errors.</li>
+<li>Vulnerable &amp; Outdated Components — unpatched dependencies.</li>
+<li>Identification &amp; Authentication Failures.</li>
+<li>Software &amp; Data Integrity Failures — insecure deserialization, supply chain.</li>
+<li>Security Logging &amp; Monitoring Failures.</li>
+<li>Server-Side Request Forgery (SSRF).</li>
+</ol>
+<div class="say"><strong>Say this:</strong> "The OWASP Top 10 is the standard list of critical web risks. Broken access control is number one — missing authorization and IDOR — then cryptographic failures, injection like SQLi and XSS, insecure design, misconfiguration, vulnerable components, authentication failures, integrity and supply-chain failures, logging gaps, and SSRF. I use it as a checklist for threat modeling and code review, and lead with access control since it's the most common."</div>
+`,
+
+"application-security__owasp-essentials-sqli-xss-csrf-how-net-defends": `
+<p class="lead">The three classic web attacks — and .NET's defense for each.</p>
+<ul>
+<li><strong>SQL injection:</strong> untrusted input concatenated into SQL. <em>Defense:</em> parameterized queries — EF parameterizes by default; never string-concatenate.</li>
+<li><strong>XSS (cross-site scripting):</strong> untrusted input rendered as HTML/JS in the victim's browser. <em>Defense:</em> context-aware output encoding (Razor auto-encodes unless you use <code>Html.Raw</code>), plus a Content-Security-Policy.</li>
+<li><strong>CSRF (cross-site request forgery):</strong> a malicious site makes the victim's browser send an authenticated request using their cookie. <em>Defense:</em> anti-forgery tokens (<code>[ValidateAntiForgeryToken]</code>), SameSite cookies; bearer-token APIs aren't vulnerable.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "SQL injection is input concatenated into SQL — I defend with parameterized queries, which EF does by default. XSS is input rendered as script in the victim's browser — I defend with context-aware output encoding, which Razor does automatically unless I use Html.Raw, plus a Content-Security-Policy. CSRF is a malicious site making the victim's browser send an authenticated request on their cookie — I defend with anti-forgery tokens and SameSite cookies, and bearer-token APIs aren't vulnerable."</div>
+`,
+
+"application-security__cors-vs-csrf-people-confuse-these": `
+<p class="lead">Opposite concerns people constantly conflate.</p>
+<ul>
+<li><strong>CORS</strong> <em>relaxes</em> the browser's same-origin policy — it tells the browser which other origins are <strong>allowed to read</strong> your API's responses from JavaScript. It's a browser-enforced <em>permission</em>, not server security (non-browser clients ignore it).</li>
+<li><strong>CSRF</strong> is an <em>attack</em>: a malicious site tricks the victim's browser into sending an authenticated request using their cookies.</li>
+</ul>
+<div class="warn">CORS does <strong>not</strong> prevent CSRF (CSRF often doesn't need to read the response). Anti-forgery tokens + SameSite cookies prevent CSRF; loosening CORS doesn't cause it, and CORS isn't a CSRF defense.</div>
+<div class="say"><strong>Say this:</strong> "They're opposite things people conflate. CORS relaxes the same-origin policy — it says which other origins may read my API's responses from JavaScript; it's a browser-enforced permission, not server security, and non-browser clients ignore it. CSRF is an attack where a malicious site makes the victim's browser send an authenticated request on their cookies. CORS doesn't prevent CSRF — anti-forgery tokens and SameSite cookies do. CORS is who can read responses; CSRF abuses ambient cookie auth."</div>
+`,
+
+"application-security__validating-a-jwt-key-rotation": `
+<p class="lead">To <em>trust</em> a JWT you must <strong>validate</strong> it, not just decode it.</p>
+<ul>
+<li>Verify the <strong>signature</strong> with the issuer's public key — prefer asymmetric <strong>RS256</strong> over a shared-secret HS256; reject <code>alg=none</code> and algorithm-confusion attacks.</li>
+<li>Check <strong>iss</strong>, <strong>aud</strong>, <strong>exp/nbf</strong>.</li>
+<li><strong>Key rotation:</strong> the issuer publishes keys at a JWKS endpoint, each with a <code>kid</code>; the validator fetches and caches the set and picks by kid, refreshing on an unknown kid — so rotation is seamless.</li>
+</ul>
+<p>In ASP.NET, <code>AddJwtBearer</code> handles JWKS fetching/caching and validation when pointed at the authority.</p>
+<div class="say"><strong>Say this:</strong> "To trust a JWT I validate it, not just decode it: verify the signature with the issuer's public key — RS256, not a shared secret — check issuer, audience and expiry, and reject alg=none and algorithm-confusion. For rotation the issuer publishes keys at JWKS with a kid, and the validator caches them and picks by kid, refreshing on an unknown one, so rotation is seamless. In ASP.NET, AddJwtBearer handles the JWKS and validation when I point it at the authority."</div>
+`,
+
+"application-security__https-tls-what-it-actually-gives-you": `
+<p class="lead">TLS gives three things <em>on the wire</em>:</p>
+<ul>
+<li><strong>Confidentiality</strong> — encryption; eavesdroppers can't read it.</li>
+<li><strong>Integrity</strong> — tamper detection; it can't be modified undetected.</li>
+<li><strong>Server authentication</strong> — the CA-signed certificate proves you're talking to the real server, not a man-in-the-middle.</li>
+</ul>
+<div class="warn"><strong>What it does NOT give:</strong> data-at-rest encryption, client authentication (unless mTLS), or protection against app-level bugs (XSS, SQLi) or a compromised server.</div>
+<p>Enforce it with <strong>HSTS</strong> and TLS 1.2/1.3 (which gives forward secrecy via ECDHE).</p>
+<div class="say"><strong>Say this:</strong> "TLS gives three things on the wire: confidentiality so eavesdroppers can't read it, integrity so it can't be tampered with undetected, and server authentication via the CA-signed certificate so I know I'm talking to the real server, not a man-in-the-middle. It doesn't give data-at-rest encryption, client authentication unless it's mTLS, or protection from app-level bugs. I enforce it with HSTS and TLS 1.2 or 1.3, which also gives forward secrecy."</div>
+`,
+
+"application-security__password-storage-hashing-salting-work-factor": `
+<p class="lead">Never store passwords in plaintext or with fast/general hashes (MD5/SHA — GPU-crackable). Use a <strong>slow, purpose-built password hash</strong>.</p>
+<ul>
+<li><strong>Algorithm:</strong> Argon2 (preferred), bcrypt, scrypt, or PBKDF2 (what ASP.NET Identity uses).</li>
+<li><strong>Salt:</strong> a unique random salt per password (stored with the hash) defeats rainbow tables and makes identical passwords hash differently.</li>
+<li><strong>Work factor:</strong> tuned so hashing takes ~100–250ms — slow enough to resist brute force, and raised over time as hardware improves.</li>
+</ul>
+<p>Also: rate-limit login, push MFA, and <strong>hash — never encrypt</strong> (hashing is one-way).</p>
+<div class="say"><strong>Say this:</strong> "I never store passwords in plaintext or with fast hashes like MD5 — they're GPU-crackable. I use a slow, purpose-built hash: Argon2 or bcrypt, or PBKDF2 which ASP.NET Identity uses. Each password gets a unique random salt stored with it, defeating rainbow tables. The work factor is tuned so hashing takes a couple hundred milliseconds and I raise it over time. I also rate-limit login and push MFA, and I hash — never encrypt — because hashing is one-way."</div>
+`,
+
+"application-security__secrets-management-key-vault": `
+<p class="lead">Secrets — connection strings, API keys, certificates, signing keys — must <strong>never</strong> be in source code, config files, or git. Store them in a dedicated secrets manager.</p>
+<ul>
+<li><strong>Azure Key Vault / AWS Secrets Manager / HashiCorp Vault:</strong> centralized, encrypted, RBAC-controlled, audited, rotatable.</li>
+<li><strong>Access at runtime via managed identity</strong> (Azure) / IAM role (AWS) — passwordless, which solves the bootstrapping problem of how the app authenticates to the vault.</li>
+<li><strong>Local dev:</strong> <code>dotnet user-secrets</code> or env vars, never appsettings.</li>
+</ul>
+<p>Rotate regularly and scan git for leaked secrets.</p>
+<div class="say"><strong>Say this:</strong> "Secrets never go in source, config or git. I keep them in a dedicated manager like Azure Key Vault — centralized, encrypted, RBAC-controlled, audited and rotatable. The app reads them at runtime via managed identity or an IAM role, which is passwordless and solves the bootstrapping problem of authenticating to the vault. For local dev I use dotnet user-secrets, never appsettings, and I rotate secrets and scan git for leaks."</div>
+`,
+
+"application-security__multi-tenant-isolation-data-authz-everywhere": `
+<p class="lead">In a multi-tenant system, isolation is a <strong>security property, not a feature</strong> — returning another tenant's data is a breach. Enforce the tenant boundary <em>everywhere</em>.</p>
+<ul>
+<li><strong>Data:</strong> every query filtered by tenant id — centrally via EF global query filters or row-level security, so no developer can forget.</li>
+<li><strong>Cache:</strong> namespace keys by tenant.</li>
+<li><strong>AuthZ:</strong> take the tenant from the token and verify the requested resource belongs to it (defeat IDOR).</li>
+<li><strong>Background jobs:</strong> carry tenant context.</li>
+</ul>
+<p>Storage models range from a shared DB + tenant column to DB-per-tenant for strong isolation. Defense in depth: filter at the data layer <em>and</em> check ownership at the API.</p>
+<div class="say"><strong>Say this:</strong> "Multi-tenant isolation is a security property — returning another tenant's data is a breach. I enforce the boundary everywhere: every query filtered by tenant id, centrally via EF global query filters or row-level security so no one forgets; cache keys namespaced by tenant; the tenant taken from the token and the requested resource verified to belong to it, to defeat IDOR; and tenant context in background jobs. The classic bug is a direct reference like /orders/123 not checked against the caller's tenant."</div>
+`,
+
+"application-security__encryption-at-rest-in-transit-kms-key-vault": `
+<p class="lead">Two dimensions of encryption, plus key management.</p>
+<ul>
+<li><strong>In transit:</strong> TLS/mTLS on the wire.</li>
+<li><strong>At rest:</strong> transparent storage/disk/database encryption (protects stolen media — TDE, Azure Storage encryption), and column/field-level encryption for the most sensitive fields (Always Encrypted).</li>
+</ul>
+<h2>KMS &amp; envelope encryption</h2>
+<p>A KMS (Azure Key Vault, AWS KMS) stores and controls the keys. <strong>Envelope encryption:</strong> a data encryption key (DEK) encrypts the data, and a key encryption key (KEK) in the KMS wraps the DEK — so rotating the KEK is cheap and keys never leave the KMS. The point is rotation, access control, and audit; never hardcode keys.</p>
+<div class="say"><strong>Say this:</strong> "Encryption has two dimensions: in transit with TLS or mTLS, and at rest — transparent storage encryption to protect stolen media, plus column-level encryption like Always Encrypted for the most sensitive fields. Keys live in a KMS like Key Vault using envelope encryption — a data key encrypts the data and a key-encryption-key in the KMS wraps it — so rotation is cheap and keys never leave the KMS. The point is rotation, access control and audit; I never hardcode keys."</div>
+`,
+
+"application-security__mtls-for-service-to-service": `
+<p class="lead"><strong>Mutual TLS:</strong> both sides present and verify certificates — the client authenticates the server (normal TLS) <em>and</em> the server authenticates the client via a client certificate.</p>
+<p>This gives strong, cryptographic <strong>service-to-service identity</strong> — better than a bearer token that can be stolen or replayed — plus the usual TLS encryption and integrity. It's standard in a <strong>service mesh</strong> (Istio/Linkerd issue and rotate per-workload certs and enforce mTLS between all services — zero-trust networking).</p>
+<p>The cost is certificate management (issuance, rotation, revocation), which the mesh automates. It pairs with token-based authz — mTLS authenticates the service, tokens carry the user/scope.</p>
+<div class="say"><strong>Say this:</strong> "Mutual TLS has both sides present and verify certificates — the client checks the server as usual, and the server also authenticates the client via a client certificate. That's strong cryptographic service-to-service identity, better than a bearer token that can be stolen, plus TLS encryption. It's standard in a service mesh, where Istio or Linkerd issue and rotate per-workload certs and enforce mTLS for zero-trust. The cost is certificate management, which the mesh automates, and it pairs with tokens carrying the user and scope."</div>
+`,
+
+"application-security__dependency-supply-chain-scanning-sbom": `
+<p class="lead">Most of an app is third-party dependencies — which carry known vulnerabilities (OWASP A06) and are a supply-chain attack surface (malicious or typosquatted packages, compromised builds).</p>
+<ul>
+<li><strong>SCA (Software Composition Analysis):</strong> scan dependencies for known CVEs (Dependabot, Snyk, GitHub security) — fail the build on criticals, auto-update. Pin versions with lock files.</li>
+<li><strong>SBOM (Software Bill of Materials):</strong> a manifest of every component and version, so when a CVE drops (like Log4Shell) you instantly know if you're affected.</li>
+<li><strong>Provenance:</strong> sign artifacts/images (Sigstore), verify signatures, least-privilege CI, protect the pipeline.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Most of an app is third-party dependencies, which carry known vulnerabilities and are a supply-chain surface. I run software composition analysis — Dependabot or Snyk — to scan for CVEs, fail the build on criticals, and auto-update, and I pin versions with lock files. I generate an SBOM — a bill of materials of every component and version — so when something like Log4Shell drops I instantly know if I'm affected. And I sign artifacts, verify signatures, and lock down the build pipeline — shifting security left into CI."</div>
+`,
 };
