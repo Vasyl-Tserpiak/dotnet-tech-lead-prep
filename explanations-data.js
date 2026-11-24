@@ -4188,4 +4188,407 @@ FROM orders ORDER BY customer_id, created_at DESC;   -- latest order per custome
 <p><strong>Smells:</strong> interfaces with one implementation, pass-through layers, premature generalization, pattern soup. Introduce a pattern when the pain is <strong>real and repeated</strong> (rule of three); keep KISS/YAGNI as the default.</p>
 <div class="say"><strong>Say this:</strong> "A pattern solves a specific problem, so applying one without that problem just adds complexity — over-engineering. I don't reach for a Strategy or Factory with a single implementation, I don't put Clean architecture or CQRS on a simple CRUD app, and I don't add a pattern because it's 'best practice' rather than to solve pain. The smells are interfaces with one implementation, pass-through layers, and premature generalization. I introduce a pattern when the pain is real and repeated — the rule of three — and keep KISS and YAGNI as the default."</div>
 `,
+
+"ci-cd-git-deployment__merge-vs-rebase-vs-cherry-pick": `
+<p class="lead">Three ways to combine work.</p>
+<ul>
+<li><strong>Merge:</strong> ties two branches together with a merge commit — preserves true history (non-destructive), but can clutter it with merge commits.</li>
+<li><strong>Rebase:</strong> replays your commits on top of another branch for a clean, <em>linear</em> history — but it <strong>rewrites commit hashes</strong>, so never rebase a shared/public branch others have pulled.</li>
+<li><strong>Cherry-pick:</strong> applies one specific commit (by hash) onto another branch — for grabbing a single fix without the whole branch.</li>
+</ul>
+<p><strong>Rule:</strong> rebase your private branch to tidy it before merging; merge to integrate; cherry-pick to pull one commit.</p>
+<div class="say"><strong>Say this:</strong> "Merge ties two branches with a merge commit — it preserves true history but can clutter it. Rebase replays my commits on top of another branch for a clean linear history, but it rewrites hashes, so I never rebase a shared branch others have pulled. Cherry-pick applies one specific commit onto another branch. My rule: rebase my private branch to tidy it before merging, merge to integrate, cherry-pick to grab one commit."</div>
+`,
+
+"ci-cd-git-deployment__reset-vs-revert-recovering-a-lost-commit-reflog": `
+<p class="lead">Two ways to undo, and a safety net.</p>
+<ul>
+<li><strong>Reset:</strong> moves the branch pointer — <code>--soft</code> keeps changes staged, <code>--mixed</code> unstaged (default), <code>--hard</code> discards them. It <strong>rewrites history</strong>, so use it on local branches only.</li>
+<li><strong>Revert:</strong> creates a <em>new</em> commit that undoes a previous one — safe for shared branches because it doesn't rewrite history. The right way to undo something already pushed.</li>
+<li><strong>Reflog:</strong> git records every position of <code>HEAD</code>, so a "lost" commit after a bad reset/rebase/branch-delete is recoverable — find it in <code>git reflog</code> and reset/cherry-pick it back. Nothing is truly gone until garbage collection.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Reset moves the branch pointer — soft keeps changes staged, hard discards them — and rewrites history, so I only use it locally. Revert creates a new commit that undoes a previous one without rewriting history, which is the safe way to undo something already pushed. And if I lose a commit after a bad reset or rebase, I use the reflog — git records every position of HEAD — to find it and reset or cherry-pick it back. Nothing's really gone until GC."</div>
+`,
+
+"ci-cd-git-deployment__trunk-based-vs-gitflow-cleaning-messy-history": `
+<p class="lead">Two branching strategies.</p>
+<ul>
+<li><strong>Trunk-based:</strong> everyone integrates into <code>main</code> frequently (at least daily) via short-lived branches, with <strong>feature flags</strong> for incomplete work — the modern default, enabling continuous integration/delivery and avoiding merge hell.</li>
+<li><strong>GitFlow:</strong> long-lived <code>develop</code>/<code>release</code>/<code>feature</code>/<code>hotfix</code> branches with a heavier process — suited to scheduled, versioned releases, but heavy and painful to merge.</li>
+</ul>
+<p><strong>Cleaning history before merge:</strong> squash WIP commits into meaningful units with good messages (interactive rebase / squash-merge) so <code>main</code> is readable — but never rewrite <em>shared</em> history.</p>
+<div class="say"><strong>Say this:</strong> "Trunk-based has everyone integrate into main frequently, at least daily, with short-lived branches and feature flags for incomplete work — the modern default because it enables continuous integration and avoids merge hell. GitFlow uses long-lived develop, release and feature branches with a heavier process, suited to scheduled versioned releases but painful to merge. Before merging I squash WIP commits into meaningful units with good messages, but I never rewrite shared history."</div>
+`,
+
+"ci-cd-git-deployment__what-makes-a-good-pull-request-review": `
+<p class="lead">A good PR and a good review are both about keeping the change reviewable.</p>
+<ul>
+<li><strong>Good PR:</strong> small and focused on one logical change, a description that says <em>what and why</em>, passing CI, and self-reviewed first. Small PRs get real reviews and merge fast; a huge one gets rubber-stamped.</li>
+<li><strong>Good review:</strong> check correctness, design, readability, tests, security; be <em>timely</em> (don't block the team); be kind and specific — comment on the code, not the person; separate blocking issues from nits.</li>
+</ul>
+<p>Automate format, lint and static analysis so reviewers focus on logic and design.</p>
+<div class="say"><strong>Say this:</strong> "A good PR is small and focused on one logical change, with a description of what and why, passing CI, and self-reviewed first — small PRs get real reviews, a huge one gets rubber-stamped. A good review checks correctness, design, readability, tests and security, is timely so it doesn't block the team, and is kind and specific — on the code, not the person — separating blocking issues from nits. I automate format and lint so reviewers focus on logic and design."</div>
+`,
+
+"ci-cd-git-deployment__monorepo-vs-polyrepo": `
+<p class="lead">Two repository strategies.</p>
+<table>
+<tr><th>Monorepo</th><th>Polyrepo</th></tr>
+<tr><td>atomic cross-service commits</td><td>strong independence / clear ownership</td></tr>
+<tr><td>shared tooling, easy code sharing</td><td>independent versioning &amp; CI</td></tr>
+<tr><td>needs scale tooling (build cache, selective CI); can couple teams</td><td>cross-cutting changes span many repos; version drift</td></tr>
+</table>
+<p>Big tech uses monorepos with heavy tooling; many orgs use polyrepos for microservices. Choose by team size, coupling, and tooling maturity — a monorepo needs investment to scale.</p>
+<div class="say"><strong>Say this:</strong> "A monorepo keeps all services in one repository — atomic cross-service commits, shared tooling, easy code sharing — but needs scaling tooling like build caching and selective CI and can couple teams. Polyrepo gives each service its own repo with strong independence and clear ownership, but cross-cutting changes span many repos and you fight version drift. I choose by team size, coupling, and how mature the tooling is."</div>
+`,
+
+"ci-cd-git-deployment__design-a-ci-cd-pipeline": `
+<p class="lead"><strong>CI</strong> (Continuous Integration): on every push/PR, automatically build, run unit + integration tests, lint, and security-scan — fast feedback, keeping <code>main</code> green. <strong>CD</strong> (Continuous Delivery/Deployment): package a versioned artifact <em>once</em>, then promote it through environments with gates.</p>
+<h2>Stages &amp; principles</h2>
+<p>build → test → scan → package → deploy (dev → staging → prod) → smoke test → promote.</p>
+<ul>
+<li><strong>Build once, promote the same artifact</strong> — never rebuild per environment.</li>
+<li>Fast pipeline (parallelize, cache); fail fast; manual approval gate for prod; automated rollback.</li>
+<li>Secrets from a vault; deploy via infrastructure as code; observe the pipeline and the app.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "CI runs on every push: build, unit and integration tests, lint and security scanning, keeping main green. CD packages a versioned artifact once, then promotes that same artifact through dev, staging and prod with gates — build once, promote everywhere, never rebuild per environment. I parallelize and cache to stay fast, fail fast, put a manual approval before prod, pull secrets from a vault, deploy via IaC, and have automated rollback plus smoke tests after each deploy."</div>
+`,
+
+"ci-cd-git-deployment__rolling-vs-blue-green-vs-canary-deployments": `
+<p class="lead">Three zero-downtime deployment strategies.</p>
+<ul>
+<li><strong>Rolling:</strong> replace instances gradually while the rest serve — no extra infra, but both versions run together (needs backward compatibility) and rollback is slow.</li>
+<li><strong>Blue-green:</strong> two identical environments; deploy to the idle one, test, then switch <em>all</em> traffic at once — instant rollback (switch back), but double the infra and a big-bang cutover.</li>
+<li><strong>Canary:</strong> route a small % of real traffic to the new version, watch metrics, ramp up or roll back — safest and lowest blast radius, but needs traffic-splitting and good monitoring.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Rolling replaces instances gradually while the rest serve — no extra infra, but both versions run together so they must be compatible, and rollback is slow. Blue-green runs two environments and flips all traffic at once, giving instant rollback by flipping back, at double the infra. Canary sends a small percentage of real traffic to the new version, watches metrics, and ramps up or rolls back — the safest, lowest-blast-radius option, but it needs traffic splitting and good monitoring. I choose by risk tolerance and infra."</div>
+`,
+
+"ci-cd-git-deployment__zero-downtime-deployment-with-a-db-migration": `
+<p class="lead">The hard case: during a rolling deploy, old and new code run <em>simultaneously</em>, so every schema change must be backward compatible. Use <strong>expand-contract</strong> (parallel change).</p>
+<h2>Renaming a column, safely</h2>
+<ol>
+<li><strong>Expand:</strong> add the new column (nullable), deploy — old code ignores it.</li>
+<li>Deploy code that writes <em>both</em> old and new and reads the new; backfill existing rows.</li>
+<li><strong>Contract:</strong> once all code uses the new column, drop the old one in a <em>later</em> release.</li>
+</ol>
+<p>Additive first; never a breaking change in one step; avoid long-locking migrations on big tables (add indexes concurrently, add NOT NULL in steps); run migrations separately from the code deploy.</p>
+<div class="say"><strong>Say this:</strong> "The hard part is that during a rolling deploy old and new code run at once, so every schema change must be backward compatible. I use expand-contract: to rename a column I add the new nullable column, deploy code that writes both and reads the new one and backfill, then drop the old column in a later release. Additive first, never a breaking change in one step, avoid long-locking migrations on big tables, and run migrations separately from the code deploy. The key is decoupling the schema change from the code change across releases."</div>
+`,
+
+"ci-cd-git-deployment__release-approvals-rollback-gitops-argocd-flux": `
+<p class="lead">Governance, rollback, and the GitOps model.</p>
+<ul>
+<li><strong>Release approvals:</strong> automated gates (tests/scans must pass) + a manual approval for prod, with an audit trail.</li>
+<li><strong>Rollback:</strong> redeploy the last-known-good <em>versioned artifact</em> (why you build once and keep artifacts), or flip blue-green — with an expand-contract plan so the database can roll back too.</li>
+<li><strong>GitOps:</strong> git is the single source of truth for desired state; a controller (<strong>ArgoCD, Flux</strong>) continuously reconciles the cluster to the repo. You deploy by merging a manifest change and roll back with <code>git revert</code>.</li>
+</ul>
+<p>GitOps is declarative, auditable (git history = deploy history), self-healing (drift corrected), and pull-based.</p>
+<div class="say"><strong>Say this:</strong> "I gate releases on passing tests and scans plus a manual approval for prod, with an audit trail. Rollback is redeploying the last-known-good versioned artifact — which is why I build once and keep artifacts — or flipping blue-green, with an expand-contract plan so the database can roll back too. GitOps makes git the source of truth: a controller like ArgoCD or Flux continuously reconciles the cluster to the repo, so I deploy by merging a manifest change and roll back with git revert — declarative, auditable, self-healing, and pull-based."</div>
+`,
+
+"ci-cd-git-deployment__versioning-artifacts-semver-build-once-promote": `
+<p class="lead">Two related disciplines.</p>
+<ul>
+<li><strong>SemVer:</strong> <code>MAJOR.MINOR.PATCH</code> — MAJOR for breaking changes, MINOR for backward-compatible features, PATCH for backward-compatible fixes — so consumers know what an upgrade means.</li>
+<li><strong>Build once, promote:</strong> CI produces a single <em>immutable, versioned</em> artifact (an image tagged by version + commit) <strong>once</strong>, and you promote that exact artifact through environments — never rebuild per environment, because rebuilding risks drift from what you tested.</li>
+</ul>
+<p>Pin images by version or digest, <strong>never just <code>latest</code></strong> (a moving target), store them in a registry, and keep provenance back to the commit.</p>
+<div class="say"><strong>Say this:</strong> "SemVer is MAJOR.MINOR.PATCH — major for breaking changes, minor for compatible features, patch for fixes — so consumers know what an upgrade means. And I build once: CI produces a single immutable versioned image tagged by version and commit, and I promote that exact artifact through dev, staging and prod rather than rebuilding per environment, because rebuilding risks drift from what I tested. I pin images by version or digest, never just 'latest', and keep provenance back to the commit."</div>
+`,
+
+"docker__images-vs-containers-registries": `
+<p class="lead">An <strong>image</strong> is a read-only, layered template — the app + its dependencies + runtime + config, built from a Dockerfile. A <strong>container</strong> is a running instance of an image: an isolated process with the image's layers plus a thin writable layer, its own filesystem and network.</p>
+<p>Image is to container as <em>class is to object</em>. Containers are ephemeral — changes to the writable layer vanish on removal unless you use a volume.</p>
+<p>A <strong>registry</strong> (Docker Hub, ACR, ECR, GHCR) stores and distributes images — you <strong>push</strong> to publish and <strong>pull</strong> to run, tagging images by version. Build once, run anywhere.</p>
+<div class="say"><strong>Say this:</strong> "An image is a read-only layered template — the app plus its dependencies, runtime and config, built from a Dockerfile. A container is a running instance: an isolated process with the image's layers plus a thin writable layer. Image is to container as class is to object. Containers are ephemeral — changes vanish on removal unless I use a volume. A registry like Docker Hub or ACR stores and distributes images — I push to publish and pull to run, tagged by version."</div>
+`,
+
+"docker__dockerfile-multi-stage-builds": `
+<p class="lead">A <strong>Dockerfile</strong> is the recipe to build an image — instructions (<code>FROM</code>, <code>COPY</code>, <code>RUN</code>…), each creating a layer. A <strong>multi-stage build</strong> uses several <code>FROM</code> stages in one file.</p>
+<pre><code># build stage: full SDK compiles the app
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+COPY . .
+RUN dotnet publish -c Release -o /app
+
+# runtime stage: small base, only the published output
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+COPY --from=build /app .
+ENTRYPOINT ["dotnet", "MyApp.dll"]</code></pre>
+<p>The final image contains only what's needed to <em>run</em> — no SDK, source, or build tools — so it's far smaller, faster to pull, and has a smaller attack surface.</p>
+<div class="say"><strong>Say this:</strong> "A Dockerfile is the recipe — instructions like FROM, COPY and RUN, each a layer. A multi-stage build uses several FROM stages: a build stage with the full SDK compiles and publishes the app, then a small runtime stage copies only the published output onto a minimal base, so the final image has no SDK, source or build tools. For .NET that's an SDK build stage running dotnet publish, then an aspnet runtime stage copying the output. It cuts image size and attack surface dramatically."</div>
+`,
+
+"docker__layers-build-cache-optimization": `
+<p class="lead">Each Dockerfile instruction is a cached <strong>layer</strong>. On rebuild, Docker reuses cached layers until the <em>first changed</em> instruction — then it rebuilds that layer and everything below it. So <strong>order matters</strong>.</p>
+<p>Put stable steps first (base image, dependency restore), volatile steps last (copying source). The .NET pattern:</p>
+<pre><code>COPY *.csproj .
+RUN dotnet restore        # cached unless dependencies change
+COPY . .                  # source changes here, below the restore
+RUN dotnet publish ...</code></pre>
+<p>So a code change doesn't re-download every NuGet package. Add a <code>.dockerignore</code> (bin, obj, .git) to shrink the build context and improve caching.</p>
+<div class="say"><strong>Say this:</strong> "Each instruction is a cached layer, and on rebuild Docker reuses layers until the first changed one, then rebuilds everything below it. So I order from stable to volatile: base image and dependency restore first, source last. In .NET I copy the csproj and restore first — cached unless dependencies change — then copy the rest and build, so a code change doesn't re-download every NuGet package. I add a .dockerignore for bin, obj and .git to shrink the context and improve caching."</div>
+`,
+
+"docker__networking-bridge-host-overlay-port-mapping": `
+<p class="lead">Docker network drivers:</p>
+<ul>
+<li><strong>Bridge (default):</strong> a private virtual network on the host — containers are isolated, reach each other by name on a <em>user-defined</em> bridge, and get outside via NAT. Publish a port with <code>-p host:container</code>.</li>
+<li><strong>Host:</strong> the container shares the host's network stack directly — no isolation or mapping, fastest, Linux only.</li>
+<li><strong>Overlay:</strong> a multi-host network spanning several Docker hosts (orchestration) so containers on different machines communicate.</li>
+<li><strong>None:</strong> no networking.</li>
+</ul>
+<p>Prefer user-defined bridge networks so services find each other by name; port-map only what must be exposed.</p>
+<div class="say"><strong>Say this:</strong> "The default is the bridge network — containers on a private virtual network, isolated, reaching each other by name on a user-defined bridge and getting outside via NAT; I publish a port with -p host:container. Host networking shares the host's stack directly — no isolation, fastest, Linux only. Overlay spans multiple hosts for orchestration. I use user-defined bridge networks so services find each other by name, and only port-map what needs exposing."</div>
+`,
+
+"docker__volumes-bind-mounts-persistence": `
+<p class="lead">Containers are ephemeral — the writable layer is lost on removal. To persist or share data, use mounts.</p>
+<ul>
+<li><strong>Volumes:</strong> Docker-managed storage — the preferred way to persist data (databases, uploads): portable, backed up, decoupled from the host path.</li>
+<li><strong>Bind mounts:</strong> map a specific host directory into the container — great for local dev (mount your source for live reload), but tied to the host's filesystem layout.</li>
+<li><strong>tmpfs:</strong> in-memory, non-persistent.</li>
+</ul>
+<p>Keep containers <strong>stateless</strong>; put state in named volumes or external services.</p>
+<div class="say"><strong>Say this:</strong> "Containers are ephemeral — the writable layer vanishes on removal — so for persistence I use mounts. A volume is Docker-managed storage, the preferred way to persist a database or uploads: portable and decoupled from the host path. A bind mount maps a specific host directory in, great for local dev where I mount my source for live reload but it ties me to the host layout. I keep containers stateless and put state in named volumes or external services."</div>
+`,
+
+"docker__docker-compose-multi-container-local-dev": `
+<p class="lead"><strong>Docker Compose</strong> defines a multi-container application in one YAML file — <em>services</em> (containers), networks, volumes — and brings it all up with <code>docker compose up</code>.</p>
+<p>Each service declares its image/build, ports, environment, volumes, and <code>depends_on</code>, on a shared network where they reach each other by <strong>service name</strong>. Ideal for local dev and CI: your app + Postgres + Redis + a broker in one command.</p>
+<div class="warn">It's <strong>not</strong> a production orchestrator (that's Kubernetes/Swarm) — it's for dev/CI and simple single-host setups. Use <code>depends_on</code> + healthchecks for start order/readiness.</div>
+<div class="say"><strong>Say this:</strong> "Docker Compose defines a multi-container app in one YAML file — services, networks and volumes — brought up with docker compose up. Each service declares its image or build, ports, environment and volumes, on a shared network where they reach each other by service name. It's ideal for local dev and CI: my app plus Postgres, Redis and a broker in one command. It's not a production orchestrator — that's Kubernetes — but for dev and simple single-host setups it's perfect, with depends_on and healthchecks for start order."</div>
+`,
+
+"docker__resource-limits-health-checks": `
+<p class="lead">Two container-stability controls.</p>
+<ul>
+<li><strong>Resource limits:</strong> cap CPU and memory (<code>--memory</code>, <code>--cpus</code>) so one container can't starve the others or the host. Without limits, a runaway container can take down the box; with them, a memory leak OOMs just that container.</li>
+<li><strong>Health checks:</strong> a <code>HEALTHCHECK</code> instruction runs a command periodically to report the container healthy/unhealthy — the orchestrator uses it to restart or route traffic. Distinguish <em>liveness</em> (restart) from <em>readiness</em> (don't route yet).</li>
+</ul>
+<p>Size limits to the app's real needs; keep health checks cheap.</p>
+<div class="say"><strong>Say this:</strong> "I set resource limits — memory and CPU caps — so one container can't starve the others or the host; a memory leak then OOMs just that container, not the whole box. And a HEALTHCHECK runs a command periodically to report the container healthy or unhealthy, which the orchestrator uses to restart it or route traffic. I distinguish liveness from readiness, size limits to the app's real needs, and keep the health check cheap. Both are essential for stability under load."</div>
+`,
+
+"docker__image-security-non-root-distroless-minimal-scanning": `
+<p class="lead">Harden images along a few axes.</p>
+<ul>
+<li><strong>Run as non-root:</strong> add a non-root <code>USER</code> — a root container is a bigger risk if escaped.</li>
+<li><strong>Minimal base:</strong> use small bases (alpine) or <strong>distroless</strong> (no shell, no package manager, just app + runtime) — fewer packages means fewer CVEs and no shell for an attacker.</li>
+<li><strong>Scan images:</strong> vulnerability scanning (Trivy, Snyk, registry scanning) in CI, failing on criticals.</li>
+</ul>
+<div class="warn">Never bake secrets into layers — they persist in image history. Inject at runtime, pin the base by digest, rebuild for patches, and sign images for provenance.</div>
+<div class="say"><strong>Say this:</strong> "I harden images: run as a non-root USER since a root container is a bigger risk if escaped; use a minimal base like alpine or distroless, which has no shell or package manager, so fewer CVEs and no shell for an attacker; and scan for vulnerabilities in CI with Trivy or Snyk, failing on criticals. I never bake secrets into layers because they persist in image history — I inject them at runtime — pin the base by digest, rebuild for patches, and sign images for provenance."</div>
+`,
+
+"kubernetes__architecture-control-plane-nodes-kubelet-etcd-scheduler": `
+<p class="lead">A cluster = <strong>control plane</strong> + <strong>worker nodes</strong>, and the whole model is declarative: you declare desired state and controllers continuously reconcile to it.</p>
+<h2>Control plane</h2>
+<ul>
+<li><strong>API server</strong> — the single front door; all operations go through it, and it's the only component that talks to etcd.</li>
+<li><strong>etcd</strong> — the distributed key-value store holding all cluster state (the source of truth).</li>
+<li><strong>Scheduler</strong> — assigns pods to nodes by resources/constraints.</li>
+<li><strong>Controller-manager</strong> — reconciliation loops driving actual state toward desired.</li>
+</ul>
+<h2>Worker nodes</h2>
+<p><strong>kubelet</strong> (agent that runs/monitors pods via the container runtime), <strong>kube-proxy</strong> (service networking), and the container runtime (containerd).</p>
+<div class="say"><strong>Say this:</strong> "A cluster is a control plane plus worker nodes. The control plane has the API server as the single front door, etcd holding all cluster state, the scheduler that assigns pods to nodes, and the controller-manager running reconciliation loops that drive actual toward desired. Each node runs the kubelet, which runs pods via the container runtime, plus kube-proxy for service networking. The model is declarative: I declare desired state and controllers continuously reconcile."</div>
+`,
+
+"kubernetes__pods-deployments-replicasets": `
+<p class="lead">A <strong>Pod</strong> is the smallest deployable unit — one or more tightly-coupled containers sharing a network namespace (same IP) and storage, usually one app container plus maybe a sidecar. Pods are ephemeral and disposable.</p>
+<ul>
+<li><strong>ReplicaSet:</strong> keeps N identical pod replicas running, recreating failed ones.</li>
+<li><strong>Deployment:</strong> manages ReplicaSets and adds declarative updates, <strong>rolling updates</strong>, and <strong>rollbacks</strong> — you almost always use a Deployment, not raw pods.</li>
+</ul>
+<p>For stateful apps use a <strong>StatefulSet</strong> (stable identity/storage); for node-level agents a <strong>DaemonSet</strong>; for batch a <strong>Job/CronJob</strong>.</p>
+<div class="say"><strong>Say this:</strong> "A pod is the smallest deployable unit — one or more containers sharing a network namespace and storage, usually one app container plus maybe a sidecar — and pods are ephemeral. A ReplicaSet keeps N identical pods running and recreates failed ones. A Deployment manages ReplicaSets and adds declarative updates, rolling updates and rollbacks, so I almost always use a Deployment. For stateful apps I use a StatefulSet, for node agents a DaemonSet, and for batch a Job or CronJob."</div>
+`,
+
+"kubernetes__services-networking-clusterip-nodeport-loadbalancer": `
+<p class="lead">Pods are ephemeral with changing IPs, so a <strong>Service</strong> gives a stable virtual IP + DNS name that load-balances across pods selected by labels.</p>
+<ul>
+<li><strong>ClusterIP (default):</strong> reachable only inside the cluster — internal service-to-service.</li>
+<li><strong>NodePort:</strong> exposes the service on a static port on every node.</li>
+<li><strong>LoadBalancer:</strong> provisions a cloud load balancer with an external IP — the standard way to expose a service externally.</li>
+</ul>
+<p>kube-proxy implements the routing; services get a cluster DNS name (<code>my-svc.namespace.svc</code>). For L7 HTTP routing, put an <strong>Ingress</strong> on top rather than a LoadBalancer per service.</p>
+<div class="say"><strong>Say this:</strong> "Pods have changing IPs, so a Service gives a stable virtual IP and DNS name that load-balances across pods selected by labels. ClusterIP is internal-only for service-to-service; NodePort exposes it on a static port on every node; LoadBalancer provisions a cloud load balancer with an external IP — the standard external exposure. kube-proxy routes, and services get a DNS name like my-svc.namespace. For L7 HTTP routing I put an Ingress on top rather than one LoadBalancer per service."</div>
+`,
+
+"kubernetes__ingress-the-gateway-api": `
+<p class="lead">An <strong>Ingress</strong> is an L7 (HTTP/HTTPS) entry point that routes external traffic to services by <strong>host and path</strong>, with TLS termination — so you expose many services behind <em>one</em> external load balancer instead of a LoadBalancer per service.</p>
+<p>An <strong>Ingress Controller</strong> (nginx, Traefik, cloud) actually implements the rules.</p>
+<p>The <strong>Gateway API</strong> is the newer, more expressive successor — a role-oriented, extensible model (GatewayClass, Gateway, HTTPRoute) that fixes Ingress's annotation-driven limits and supports advanced routing and more protocols.</p>
+<div class="say"><strong>Say this:</strong> "An Ingress is an L7 entry point that routes external HTTP to services by host and path and terminates TLS, so I expose many services behind one external load balancer instead of a LoadBalancer each. An Ingress Controller like nginx implements the rules. The Gateway API is the newer, more expressive successor — a role-oriented model with GatewayClass, Gateway and HTTPRoute — that fixes Ingress's annotation limits and supports richer routing and more protocols. I use Ingress today and Gateway API where advanced routing is needed."</div>
+`,
+
+"kubernetes__configmaps-secrets": `
+<p class="lead">Externalize configuration from the image (12-factor).</p>
+<ul>
+<li><strong>ConfigMap:</strong> non-sensitive key-value config injected as environment variables or mounted files — change config without rebuilding the image.</li>
+<li><strong>Secret:</strong> the same, for sensitive data (passwords, keys, certs).</li>
+</ul>
+<div class="warn"><strong>Secrets are only base64-encoded by default, NOT encrypted</strong> — anyone with API/etcd access can read them. Enable encryption-at-rest for etcd, restrict with RBAC, and for real secret management use an external store (Key Vault via the Secrets Store CSI driver, External Secrets Operator).</div>
+<p>Mount secrets as files (safer than env vars, which can leak), and never commit them to git.</p>
+<div class="say"><strong>Say this:</strong> "I externalize config: a ConfigMap holds non-sensitive key-value config injected as env vars or mounted files, so I change config without rebuilding. A Secret is the same for sensitive data — but Secrets are only base64-encoded, not encrypted, so anyone with etcd or API access can read them. I harden with encryption-at-rest and RBAC, and for real secrets use an external store like Key Vault via the Secrets Store CSI driver. I mount secrets as files rather than env vars, and never commit them."</div>
+`,
+
+"kubernetes__liveness-readiness-startup-probes-graceful-shutdown": `
+<p class="lead">Probes let the kubelet manage pod health.</p>
+<ul>
+<li><strong>Liveness:</strong> is the app alive? On failure Kubernetes <em>restarts</em> the container — for hangs/deadlocks.</li>
+<li><strong>Readiness:</strong> is it ready to serve? On failure the pod is removed from Service endpoints (no traffic) but <em>not</em> restarted — for warmup or a flaky dependency.</li>
+<li><strong>Startup:</strong> for slow-starting apps — gives extra time before liveness kicks in.</li>
+</ul>
+<h2>Graceful shutdown</h2>
+<p>On termination, Kubernetes sends <code>SIGTERM</code>, waits <code>terminationGracePeriodSeconds</code>, then <code>SIGKILL</code>. The app should catch SIGTERM, stop accepting new requests, drain in-flight ones, and exit — that's how you get zero-dropped-request deploys.</p>
+<div class="say"><strong>Say this:</strong> "The liveness probe checks the app is alive and restarts the container on failure — for hangs. The readiness probe checks it can serve and, on failure, removes the pod from Service endpoints without restarting — for warmup or a flaky dependency. A startup probe gives slow starters time before liveness. For graceful shutdown, Kubernetes sends SIGTERM then SIGKILL after a grace period, so my app catches SIGTERM, stops taking new requests, drains in-flight ones, and exits — zero dropped requests."</div>
+`,
+
+"kubernetes__requests-limits-qos-classes-oomkilled": `
+<p class="lead">For each container you set resource <strong>requests</strong> (guaranteed minimum the scheduler places on) and <strong>limits</strong> (hard cap). Over the CPU limit it's throttled; over the memory limit it's <strong>OOMKilled</strong>.</p>
+<h2>QoS classes (from requests/limits)</h2>
+<ul>
+<li><strong>Guaranteed:</strong> requests == limits — highest priority, evicted last.</li>
+<li><strong>Burstable:</strong> requests &lt; limits.</li>
+<li><strong>BestEffort:</strong> none set — evicted first under node pressure.</li>
+</ul>
+<p>Set requests to real usage (too high wastes capacity, too low risks eviction/throttling); set memory limit = request for critical pods to get Guaranteed. OOMKilled means the memory limit is too low or there's a leak.</p>
+<div class="say"><strong>Say this:</strong> "I set requests — the guaranteed minimum the scheduler places on — and limits, the hard cap. Over the CPU limit the container is throttled; over memory it's OOMKilled. Requests and limits set the QoS class: Guaranteed when they're equal, evicted last; Burstable when requests are below limits; BestEffort when nothing's set, evicted first. I set requests to real usage and make memory request equal the limit for critical pods to get Guaranteed. OOMKilled usually means the limit is too low or there's a leak."</div>
+`,
+
+"kubernetes__autoscaling-hpa-vpa-cluster-autoscaler": `
+<p class="lead">Three autoscalers at different levels.</p>
+<ul>
+<li><strong>HPA (Horizontal Pod Autoscaler):</strong> scales the <em>number</em> of pod replicas on CPU/memory or custom/external metrics (e.g. queue length) — the main app scaler.</li>
+<li><strong>VPA (Vertical Pod Autoscaler):</strong> right-sizes a pod's CPU/memory requests/limits — scales the pod itself (not with HPA on the same resource).</li>
+<li><strong>Cluster Autoscaler:</strong> adds/removes <em>nodes</em> when pods can't be scheduled or nodes are underused — scales the infrastructure.</li>
+</ul>
+<p>They compose: HPA adds pods → if no capacity, Cluster Autoscaler adds a node. For event-driven scaling (queue depth, scale-to-zero) use <strong>KEDA</strong>.</p>
+<div class="say"><strong>Say this:</strong> "The Horizontal Pod Autoscaler scales the number of pod replicas on CPU, memory or custom metrics like queue length — the main app scaler. The Vertical Pod Autoscaler right-sizes a pod's requests and limits. The Cluster Autoscaler adds or removes nodes when pods can't be scheduled or nodes are underused. They compose: HPA adds pods, and if there's no node capacity the Cluster Autoscaler adds a node. For event-driven scaling including scale-to-zero on queue depth, I use KEDA."</div>
+`,
+
+"kubernetes__rolling-updates-rollbacks": `
+<p class="lead">A Deployment does <strong>rolling updates</strong> by default — change the image and it gradually replaces old pods with new ones (controlled by <code>maxSurge</code>/<code>maxUnavailable</code>), staying available throughout and using readiness probes so traffic only goes to ready pods.</p>
+<p>If a release is bad, <code>kubectl rollout undo</code> reverts to the previous ReplicaSet (Kubernetes keeps revision history) — so rollback is fast. Watch with <code>kubectl rollout status</code>.</p>
+<p>Pair with readiness probes and a <strong>PodDisruptionBudget</strong> to keep a minimum available during disruptions.</p>
+<div class="say"><strong>Say this:</strong> "A Deployment rolls updates by default — I change the image and it gradually replaces old pods with new, controlled by maxSurge and maxUnavailable, staying available and using readiness probes so traffic only goes to ready pods. If a release is bad, kubectl rollout undo reverts to the previous ReplicaSet since Kubernetes keeps revision history, so rollback is fast. I pair it with readiness probes and a PodDisruptionBudget to keep a minimum available during disruptions."</div>
+`,
+
+"kubernetes__persistent-storage-pv-pvc-storageclass": `
+<p class="lead">Pods are ephemeral, so storage is abstracted into three objects.</p>
+<ul>
+<li><strong>PersistentVolume (PV):</strong> actual storage in the cluster (a disk).</li>
+<li><strong>PersistentVolumeClaim (PVC):</strong> a pod's request for storage (size + access mode); it binds to a matching PV.</li>
+<li><strong>StorageClass:</strong> defines a type of storage and enables <strong>dynamic provisioning</strong> — a PVC referencing it auto-creates a cloud disk on demand (no manual PV).</li>
+</ul>
+<p>Access modes: ReadWriteOnce (one node), ReadOnlyMany, ReadWriteMany. Stateful apps use <strong>StatefulSets + PVCs</strong> for stable per-pod storage.</p>
+<div class="say"><strong>Say this:</strong> "Storage is abstracted: a PersistentVolume is actual storage; a PersistentVolumeClaim is a pod's request by size and access mode, which binds to a PV; and a StorageClass defines a storage type and enables dynamic provisioning — a PVC referencing it auto-creates a cloud disk on demand, so no manual PV. Access modes like ReadWriteOnce limit it to one node. Stateful apps use StatefulSets with PVCs for stable per-pod storage. The pod claims and the StorageClass provisions."</div>
+`,
+
+"kubernetes__rbac-network-policies": `
+<p class="lead">Two security controls at different layers.</p>
+<ul>
+<li><strong>RBAC:</strong> who can do what in the cluster <em>API</em> — Roles/ClusterRoles grant verbs on resources, bound to users/ServiceAccounts via RoleBindings. Give each workload a ServiceAccount with least privilege.</li>
+<li><strong>Network Policies:</strong> control pod-to-pod <em>traffic</em>. By default the network is flat — every pod can reach every pod — so a NetworkPolicy restricts ingress/egress by labels/namespaces (e.g. only the API reaches the DB). Default-deny then allow for zero-trust; needs a CNI like Calico/Cilium.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "RBAC controls who can do what in the cluster API — Roles grant verbs on resources, bound to users or ServiceAccounts — and I give each workload a ServiceAccount with least privilege. Network Policies control pod-to-pod traffic: the network is flat by default, so a NetworkPolicy restricts ingress and egress by labels, like only the API reaching the database. I default-deny then allow for zero-trust, and it needs a CNI like Calico or Cilium. RBAC is API access, NetworkPolicy is network access."</div>
+`,
+
+"kubernetes__scheduling-taints-tolerations-affinity-nodeselector": `
+<p class="lead">Control which nodes pods land on.</p>
+<ul>
+<li><strong>nodeSelector:</strong> schedule only on nodes with matching labels (simplest).</li>
+<li><strong>Node affinity:</strong> the richer version — required/preferred rules.</li>
+<li><strong>Pod affinity / anti-affinity:</strong> schedule pods <em>near</em> (affinity) or <em>apart from</em> (anti-affinity) others — spread replicas across nodes/zones for HA, or co-locate related pods.</li>
+<li><strong>Taints &amp; tolerations:</strong> a taint on a node <em>repels</em> pods unless they have a matching toleration — reserve nodes for specific workloads (GPU, dedicated tenants).</li>
+</ul>
+<p>So affinity pulls pods toward nodes; taints push them away.</p>
+<div class="say"><strong>Say this:</strong> "nodeSelector schedules only on nodes with matching labels; node affinity is the richer version with required and preferred rules. Pod anti-affinity spreads replicas across nodes or zones for HA, and pod affinity co-locates related pods. Taints and tolerations are the inverse — a taint repels pods unless they tolerate it, reserving nodes for GPU or dedicated workloads. So affinity pulls pods toward nodes and taints push them away; I combine them to spread for availability and isolate special workloads."</div>
+`,
+
+"kubernetes__troubleshooting-describe-logs-exec-crashloopbackoff-imagepullbackoff": `
+<p class="lead">The debugging toolkit and the common statuses.</p>
+<ul>
+<li><code>kubectl describe pod</code> — the <strong>events</strong> (scheduling, probe, OOM, image-pull failures); the first thing to check.</li>
+<li><code>kubectl logs --previous</code> — a crashed container's last output.</li>
+<li><code>kubectl exec -it ... -- sh</code> — shell into a container.</li>
+</ul>
+<h2>Common statuses</h2>
+<ul>
+<li><strong>CrashLoopBackOff:</strong> the container starts then crashes repeatedly — bad config, missing dependency, failing liveness probe. Check <code>logs --previous</code>.</li>
+<li><strong>ImagePullBackOff:</strong> can't pull the image — wrong tag, or a private registry needing an <code>imagePullSecret</code>.</li>
+<li><strong>Pending:</strong> can't schedule — insufficient resources or an unbound PVC. <strong>OOMKilled:</strong> memory limit hit.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "My toolkit is kubectl describe pod to read the events — scheduling, probe, OOM or image-pull failures — kubectl logs --previous for a crashed container's last output, and kubectl exec to shell in. CrashLoopBackOff means it keeps starting and crashing — bad config, a missing dependency, or a failing liveness probe — so I check logs --previous. ImagePullBackOff means it can't pull the image — wrong tag or a private registry needing an imagePullSecret. Pending means it can't schedule. Describe plus logs solve most of it."</div>
+`,
+
+"helm-charts__chart-structure-chart-yaml-templates-values-yaml": `
+<p class="lead">A Helm <strong>chart</strong> is a package of templated Kubernetes manifests — Helm is the package manager for Kubernetes.</p>
+<ul>
+<li><code>Chart.yaml</code> — metadata: name, <code>version</code>, <code>appVersion</code>, dependencies.</li>
+<li><code>values.yaml</code> — the default, user-tunable configuration values.</li>
+<li><code>templates/</code> — the Kubernetes manifests as Go templates, filled from the values.</li>
+<li><code>charts/</code> — dependency subcharts; <code>templates/_helpers.tpl</code> — reusable snippets; <code>NOTES.txt</code> — post-install message.</li>
+</ul>
+<p><code>helm install</code> renders the templates with the values into real manifests and applies them — one chart gives a parameterized deployment of an app.</p>
+<div class="say"><strong>Say this:</strong> "A Helm chart is a package of templated Kubernetes manifests — Helm is the package manager for Kubernetes. The structure is Chart.yaml with metadata like name and version, values.yaml with the default tunable config, and templates/ holding the manifests as Go templates filled from values, plus charts/ for dependencies and _helpers.tpl for reusable snippets. helm install renders the templates with the values into real manifests and applies them, so one chart gives a parameterized deployment."</div>
+`,
+
+"helm-charts__templates-go-templating-helpers-tpl-functions": `
+<p class="lead">Helm templates are Kubernetes YAML with <strong>Go template</strong> directives.</p>
+<ul>
+<li>Reference values with <code>{{ .Values.x }}</code>, release info with <code>{{ .Release.Name }}</code>, chart info with <code>{{ .Chart.Name }}</code>.</li>
+<li>Control flow: <code>{{ if }}</code>, <code>{{ range }}</code>, <code>{{ with }}</code>.</li>
+<li>Pipelines &amp; <strong>Sprig functions</strong>: <code>{{ .Values.name | default "x" | quote }}</code>, plus <code>required</code>, <code>toYaml</code>, <code>nindent</code>.</li>
+<li><code>_helpers.tpl</code> defines named templates (<code>define</code>/<code>include</code>) for reusable snippets like labels and naming — DRY across manifests.</li>
+</ul>
+<p>Render locally with <code>helm template</code> to debug before installing.</p>
+<div class="say"><strong>Say this:</strong> "Helm templates are Kubernetes YAML with Go template directives — I reference values with .Values, release info with .Release.Name, and use if/range for control flow. Pipelines and Sprig functions like default, required, toYaml and nindent shape the output. In _helpers.tpl I define named templates with define and include for reusable snippets like labels and naming, so manifests stay DRY. I render locally with helm template to debug before installing."</div>
+`,
+
+"helm-charts__values-per-environment-overrides": `
+<p class="lead"><code>values.yaml</code> holds the chart's default configuration; you override <strong>per environment</strong> without changing the templates.</p>
+<h2>Override precedence (low → high)</h2>
+<p>chart's <code>values.yaml</code> → a <code>-f values-prod.yaml</code> overlay file → <code>--set key=value</code> on the command line.</p>
+<p>So keep a base <code>values.yaml</code> plus small per-env overlay files (<code>values-dev.yaml</code>, <code>values-prod.yaml</code>) with just the differences — replica count, image tag, resources, hostnames. Subchart values nest under the subchart name. Keep <strong>secrets out</strong> of values files.</p>
+<div class="say"><strong>Say this:</strong> "values.yaml holds the default config, and I override per environment without touching templates. Precedence goes from the chart's values.yaml, up to a -f values-prod.yaml overlay, up to --set on the command line. So I keep a base values.yaml plus small per-env overlay files with just the differences — replicas, image tag, resources, hostnames. Subchart values nest under the subchart name. It keeps environments DRY, and I keep secrets out of the values files."</div>
+`,
+
+"helm-charts__releases-upgrade-rollback": `
+<p class="lead">A <strong>release</strong> is an instance of a chart deployed with a specific config — named and tracked.</p>
+<ul>
+<li><code>helm install</code> creates it; <code>helm upgrade</code> applies new values / a new chart version as a <em>new revision</em>.</li>
+<li><code>helm rollback REVISION</code> reverts to a previous revision — Helm keeps revision history, so rollback is one command.</li>
+<li><code>helm list</code> shows releases, <code>helm history</code> the revisions. Helm 3 stores release state as Secrets in the cluster.</li>
+</ul>
+<p>Use <code>--atomic</code> so a failed upgrade auto-rolls-back.</p>
+<div class="say"><strong>Say this:</strong> "A release is an instance of a chart deployed with a specific config, named and tracked. helm install creates it, helm upgrade applies new values or a new chart version as a new revision, and helm rollback reverts to a previous revision since Helm keeps history. helm history shows revisions, helm list the releases. Helm 3 stores state as Secrets in the cluster. The big win is that a bad deploy is one helm rollback away, and I use --atomic so a failed upgrade auto-rolls-back."</div>
+`,
+
+"helm-charts__dependencies-subcharts-umbrella-charts": `
+<p class="lead">A chart can depend on other charts (declared in <code>Chart.yaml</code>, pulled into <code>charts/</code> with <code>helm dependency update</code>) — so you reuse community charts (Postgres, Redis) as <strong>subcharts</strong>.</p>
+<p>An <strong>umbrella (parent) chart</strong> groups several subcharts to deploy a whole stack — your app + its database + cache + broker — as <em>one release</em>, with each subchart's values nested under its name in the parent.</p>
+<p>You can enable/disable a subchart with a <code>condition</code>, and pin dependency versions. The nested value overrides can get deep.</p>
+<div class="say"><strong>Say this:</strong> "A chart can depend on other charts, declared in Chart.yaml and pulled into charts/ with helm dependency update, so I reuse community charts like Postgres or Redis as subcharts. An umbrella chart groups several subcharts to deploy a whole stack — my app plus its database, cache and broker — as one release, with each subchart's values nested under its name. I can enable or disable a subchart with a condition and pin versions. It lets me compose and deploy the whole system with one install, though nested overrides get deep."</div>
+`,
+
+"helm-charts__hooks-pre-post-install-upgrade-jobs": `
+<p class="lead">Helm <strong>hooks</strong> run actions at points in a release's lifecycle, via annotations on a resource (usually a Job).</p>
+<p><strong>Hook points:</strong> pre-install, post-install, pre-upgrade, post-upgrade, pre-delete, post-delete, and the rollback variants.</p>
+<p><strong>Classic use:</strong> a <em>database migration as a pre-upgrade hook</em> so the schema is updated before the new app version rolls out; or a post-install Job to seed data. Hook weights order them; delete policies clean them up.</p>
+<div class="warn">Hooks aren't tracked like normal release resources, so they're <strong>not auto-rolled-back</strong>.</div>
+<div class="say"><strong>Say this:</strong> "Helm hooks run actions at lifecycle points — pre/post install and upgrade, plus delete and rollback — via annotations on a resource, usually a Job. The classic use is a database migration as a pre-upgrade hook so the schema is updated before the new app version rolls out, or a post-install Job to seed data. Hook weights order them and delete policies clean them up. The caveat is hooks aren't tracked like normal resources, so they're not auto-rolled-back. I use them for migrations, backups and setup around deploys."</div>
+`,
+
+"helm-charts__secrets-versioning-testing-helm-lint-helm-test": `
+<p class="lead">Three operational concerns.</p>
+<ul>
+<li><strong>Secrets:</strong> never put plaintext in <code>values.yaml</code> (it's in git) — use <strong>helm-secrets</strong> (SOPS-encrypted values) or an external store (Secrets Store CSI driver / External Secrets).</li>
+<li><strong>Versioning:</strong> <code>Chart.yaml</code> has two versions — <code>version</code> (the chart's own, bump per chart change, SemVer) and <code>appVersion</code> (the app image it deploys); publish charts to a chart repository.</li>
+<li><strong>Testing:</strong> <code>helm lint</code> catches errors/best-practice issues, <code>helm template</code> renders locally to inspect, and <code>helm test</code> runs test Pods against a deployed release to verify it works.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "For secrets I never put plaintext in values.yaml since it's in git — I use helm-secrets with SOPS or an external store like the Secrets Store CSI driver. For versioning, Chart.yaml has two versions: the chart's own version, bumped with SemVer, and appVersion for the app image it deploys, and I publish to a chart repository. For testing, helm lint catches errors, helm template renders locally to inspect, and helm test runs test Pods against a deployed release. In CI I lint, template and install into a kind cluster before shipping."</div>
+`,
 };
