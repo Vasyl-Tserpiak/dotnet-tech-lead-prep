@@ -5028,4 +5028,723 @@ NaN == NaN        // false  (NaN equals nothing)</code></pre>
 <p>ESM's static nature enables dead-code elimination that CJS can't. Interop between them is tricky; in Node you opt into ESM with <code>"type":"module"</code> or <code>.mjs</code>. Modern code uses ESM; bundlers (Vite, esbuild) handle both.</p>
 <div class="say"><strong>Say this:</strong> "CommonJS is Node's original — require and module.exports, synchronous and dynamic, so you can require conditionally. ESM is the standard — import/export, static so imports resolve at parse time, which enables tree-shaking, plus it's async, browser-native, and supports top-level await. ESM's static nature allows dead-code elimination CommonJS can't. Interop is tricky, and in Node I opt into ESM with type module or .mjs. Modern code uses ESM and bundlers like Vite handle both — ESM is the standard going forward."</div>
 `,
+
+"testing-quality__the-test-pyramid": `
+<p class="lead">The <strong>test pyramid</strong> is the ideal distribution of tests by cost and speed.</p>
+<ul>
+<li><strong>Base (most):</strong> unit tests — fast, isolated, cheap; thousands run in seconds.</li>
+<li><strong>Middle:</strong> integration tests — components together (DB, API, services); slower, fewer.</li>
+<li><strong>Top (fewest):</strong> end-to-end/UI — the whole system; slow, brittle, expensive.</li>
+</ul>
+<div class="warn"><strong>Anti-pattern:</strong> the "ice-cream cone" — lots of slow, flaky E2E and few unit tests — gives a slow, unreliable suite.</div>
+<p>Push testing down to the fastest level that gives confidence; reserve E2E for critical user journeys.</p>
+<div class="say"><strong>Say this:</strong> "The test pyramid is many fast, cheap, isolated unit tests at the base, fewer integration tests that test components together like the DB and API, and a few slow, expensive end-to-end tests at the top for critical journeys. The anti-pattern is the ice-cream cone — lots of slow, flaky E2E and few unit tests. I push testing down to the fastest level that gives confidence and reserve E2E for the critical paths."</div>
+`,
+
+"testing-quality__what-makes-a-good-unit-test-first": `
+<p class="lead"><strong>FIRST</strong> captures the properties of a good unit test.</p>
+<ul>
+<li><strong>Fast</strong> — milliseconds, so you run them constantly.</li>
+<li><strong>Isolated/Independent</strong> — no dependence on other tests, order, or shared state.</li>
+<li><strong>Repeatable</strong> — same result every run, any environment (control time, network, randomness).</li>
+<li><strong>Self-validating</strong> — a clear pass/fail via asserts, no manual inspection.</li>
+<li><strong>Timely</strong> — written with the code (ideally TDD).</li>
+</ul>
+<p>Also: one concept per test, descriptive names (given-when-then), Arrange-Act-Assert, and test <em>behavior</em> not implementation so tests survive refactoring.</p>
+<div class="say"><strong>Say this:</strong> "FIRST: Fast so I run them constantly, Isolated so they don't depend on each other or shared state, Repeatable so they give the same result anywhere by controlling time and randomness, Self-validating with clear asserts, and Timely — written with the code. I keep one concept per test, use descriptive given-when-then names and Arrange-Act-Assert, and test behavior rather than implementation so tests survive refactoring."</div>
+`,
+
+"testing-quality__nunit-moq-patterns": `
+<p class="lead">The common .NET testing toolkit.</p>
+<ul>
+<li><strong>NUnit / xUnit:</strong> <code>[Test]</code>/<code>[Fact]</code>, parameterized tests (<code>[TestCase]</code>/<code>[Theory]</code>), <code>[SetUp]</code> fixtures, FluentAssertions for readable asserts, Arrange-Act-Assert.</li>
+<li><strong>Moq:</strong> mock a dependency interface (<code>new Mock&lt;IRepo&gt;()</code>), set up behavior (<code>mock.Setup(x =&gt; x.Get(1)).ReturnsAsync(entity)</code>), inject it, and verify interactions (<code>mock.Verify(x =&gt; x.Save(It.IsAny&lt;Order&gt;()), Times.Once)</code>).</li>
+</ul>
+<div class="warn">Mock the external/slow/non-deterministic dependencies to isolate the unit — but don't <strong>over-mock</strong>: mocking everything tests the mocks, not the code. Prefer real objects where cheap.</div>
+<div class="say"><strong>Say this:</strong> "I use NUnit or xUnit with parameterized tests via TestCase or Theory, SetUp fixtures, and FluentAssertions, structured Arrange-Act-Assert. Moq mocks a dependency interface — I set up behavior with Setup and ReturnsAsync, inject it to isolate the unit, and verify interactions with Verify and Times.Once. I mock the external, slow or non-deterministic dependencies, but I don't over-mock, because mocking everything just tests the mocks — I prefer real objects where they're cheap."</div>
+`,
+
+"testing-quality__tdd-red-green-refactor": `
+<p class="lead"><strong>TDD</strong> is write the test first, then the code, in a tight cycle.</p>
+<ol>
+<li><strong>Red</strong> — write a failing test for the next small behavior.</li>
+<li><strong>Green</strong> — write the <em>minimal</em> code to make it pass (don't over-build).</li>
+<li><strong>Refactor</strong> — clean up the code (and tests) with the test as a safety net.</li>
+</ol>
+<p>Benefits: tests as a spec, drives testable/decoupled design, natural coverage, confidence to refactor. Great for logic-heavy code with clear requirements; less dogmatic for exploratory/UI work. The rule: no production code without a failing test first.</p>
+<div class="say"><strong>Say this:</strong> "TDD is write the test first: red — a failing test for the next small behavior; green — the minimal code to pass; refactor — clean it up with the test as a safety net; repeat in tiny increments. It gives tests as a spec, drives testable decoupled design, natural coverage, and confidence to refactor. I lean on it for logic-heavy code with clear requirements and I'm less dogmatic for exploratory or UI work. The point isn't testing — it's design and incremental confidence."</div>
+`,
+
+"testing-quality__integration-testing-webapplicationfactory-testcontainers": `
+<p class="lead">Test components together, closer to production.</p>
+<ul>
+<li><strong>WebApplicationFactory&lt;T&gt;:</strong> spins up the ASP.NET Core app in-memory (real DI, middleware, routing) and gives an <code>HttpClient</code> to hit endpoints — testing the full pipeline (model binding, auth, serialization) without a real server; override only what you must.</li>
+<li><strong>Testcontainers:</strong> runs real dependencies (SQL Server, Postgres, Redis, Kafka) in throwaway Docker containers — so you test against a <em>real</em> database with real SQL and migrations, instead of an in-memory provider that hides bugs.</li>
+</ul>
+<p>Together: a realistic, isolated integration test — more real than unit tests, cheaper than full E2E.</p>
+<div class="say"><strong>Say this:</strong> "I use WebApplicationFactory to spin up the ASP.NET Core app in-memory with its real DI, middleware and routing, and hit endpoints with an HttpClient — testing the full pipeline including model binding and serialization. And Testcontainers runs real dependencies like Postgres or Redis in throwaway Docker containers, so I test against a real database with real SQL and migrations instead of an in-memory provider that hides bugs. Together they give a realistic, isolated integration test."</div>
+`,
+
+"testing-quality__contract-testing-for-microservices": `
+<p class="lead">In microservices, <strong>contract testing</strong> verifies the API contract between a consumer and a provider <em>without running both together</em>.</p>
+<p>With <strong>consumer-driven contracts</strong> (Pact): the consumer defines the requests it makes and responses it needs as a contract; the provider verifies in its own CI that it can satisfy that contract — so a breaking change on the provider <strong>fails the provider's build before deploy</strong>.</p>
+<p>It catches integration breakage early and independently, without a full environment — faster and more reliable than end-to-end tests for API compatibility.</p>
+<div class="say"><strong>Say this:</strong> "Contract testing verifies the API contract between a consumer and a provider without running both together. With consumer-driven contracts like Pact, the consumer defines the requests it makes and responses it needs as a contract, and the provider verifies in its own CI that it can satisfy it — so a breaking change on the provider fails the provider's build before deploy. It catches integration breakage early and independently, without a full environment, which is faster and more reliable than E2E for API compatibility."</div>
+`,
+
+"testing-quality__testing-retries-timeouts-concurrency-reliably": `
+<p class="lead">These are hard to test because they're timing-dependent — so make time and concurrency <strong>controllable</strong>, never use real sleeps (slow, flaky).</p>
+<ul>
+<li><strong>Retries:</strong> inject a fake clock / controllable delay; assert the number of attempts (verify the mock) and the final outcome.</li>
+<li><strong>Timeouts:</strong> inject the <code>CancellationToken</code> and a controllable delay; assert it cancels when exceeded.</li>
+<li><strong>Concurrency:</strong> deterministically force overlap with gates or <code>Task.WhenAll</code>, then assert invariants hold (no lost updates).</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "These are timing-dependent, so I make time and concurrency controllable rather than using real sleeps, which are slow and flaky. For retries I inject a fake clock and assert the number of attempts and the final outcome. For timeouts I inject the token and a controllable delay and assert it cancels when exceeded. For concurrency I force overlap deterministically with gates or Task.WhenAll and assert invariants like no lost updates. The principle is control time and scheduling and assert behavior, not wall-clock."</div>
+`,
+
+"testing-quality__dealing-with-flaky-tests": `
+<p class="lead">A <strong>flaky test</strong> passes and fails non-deterministically on the same code — it erodes trust until people ignore failures, including real ones.</p>
+<p><strong>Common causes:</strong> timing/race conditions (sleeps, un-awaited async), shared state making tests order-dependent, reliance on real time/dates/randomness, un-isolated external dependencies.</p>
+<p><strong>Fix the root cause:</strong> make tests isolated and deterministic — control time and randomness, no shared state, proper awaits, isolated deps via Testcontainers. <strong>Quarantine</strong> a flake so it doesn't block CI, but <em>track and fix it</em> — don't retry-until-green, which hides real bugs.</p>
+<div class="say"><strong>Say this:</strong> "A flaky test passes and fails non-deterministically on the same code, which erodes trust until people ignore failures — including real ones. The usual causes are timing and race conditions, shared state making tests order-dependent, reliance on real time or randomness, and un-isolated dependencies. I fix the root cause: isolated, deterministic tests — control time and randomness, no shared state, proper awaits, isolated deps via Testcontainers. I quarantine a flake so it doesn't block CI but track and fix it, rather than retry-until-green, which hides real bugs."</div>
+`,
+
+"testing-quality__code-coverage-mutation-testing": `
+<p class="lead">Two very different quality signals.</p>
+<ul>
+<li><strong>Coverage</strong> measures how much code the tests <em>execute</em> (line/branch %). Useful as a floor and to find untested areas — but a <strong>weak quality metric</strong>: it tells you code ran, not that it was verified (a test with no real asserts still "covers" code). Don't chase a number.</li>
+<li><strong>Mutation testing</strong> (Stryker.NET) is far stronger: it injects small bugs (mutations) and checks whether your tests <em>catch</em> them. A surviving mutant means the tests don't actually verify that behavior — it measures test <strong>effectiveness</strong>, not just execution.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Coverage measures how much code the tests execute — useful as a floor and to find untested areas, but weak as quality, because it tells me code ran, not that it was verified; a test with no real asserts still counts. So I don't chase a coverage number. Mutation testing with Stryker.NET is far stronger: it injects small bugs and checks whether my tests catch them, so a surviving mutant means the tests don't really verify that behavior. Coverage is a floor; mutation testing measures real effectiveness."</div>
+`,
+
+"testing-quality__performance-load-testing-k6-nbomber": `
+<p class="lead">Verify the system meets its performance targets under load.</p>
+<ul>
+<li><strong>Load test:</strong> expected peak — does it hold SLOs?</li>
+<li><strong>Stress test:</strong> beyond capacity — find the breaking point and failure mode.</li>
+<li><strong>Spike test:</strong> a sudden surge. <strong>Soak test:</strong> sustained load over hours — find leaks/degradation.</li>
+</ul>
+<p>Tools: <strong>k6</strong> (scriptable, CI-friendly), <strong>NBomber</strong> (.NET), JMeter, Gatling. Measure throughput, latency <strong>percentiles</strong> (p95/p99 — not averages), error rate, and resource use, in a prod-like environment. Catches pool limits, GC pressure, and lock contention that only appear under concurrency.</p>
+<div class="say"><strong>Say this:</strong> "A load test checks expected peak against SLOs, a stress test finds the breaking point and failure mode, a spike test hits a sudden surge, and a soak test runs for hours to find leaks. I use k6 or NBomber for .NET, measure throughput, latency percentiles like p95 and p99 — not averages — and error rate, in a prod-like environment with realistic data. It catches things that only appear under concurrency like pool limits, GC pressure and lock contention, and I baseline it to catch regressions."</div>
+`,
+
+"cloud-azure__compute-app-service-aks-container-apps-functions-when-each": `
+<p class="lead">Azure compute spans abstraction levels — pick by control vs management overhead.</p>
+<ul>
+<li><strong>App Service:</strong> managed PaaS for web apps/APIs — easy deploy, auto-scale, no infra.</li>
+<li><strong>Functions:</strong> serverless, event-driven — code on triggers (HTTP, queue, timer), scale to zero. For event processing, glue, cron.</li>
+<li><strong>Container Apps (ACA):</strong> serverless containers on managed Kubernetes (KEDA scaling, scale to zero, Dapr) — microservices without running K8s.</li>
+<li><strong>AKS:</strong> managed Kubernetes — full control for complex orchestration.</li>
+</ul>
+<p>Spectrum: App Service → Functions → Container Apps → AKS.</p>
+<div class="say"><strong>Say this:</strong> "App Service is managed PaaS for web apps — easy deploy and auto-scale, no infra. Functions is serverless, event-driven — code on triggers, scale to zero, for event processing and glue. Container Apps is serverless containers on managed Kubernetes with KEDA scaling, for microservices without running K8s. AKS is managed Kubernetes for full control. I pick along the spectrum from App Service to AKS by how much control I need versus management overhead."</div>
+`,
+
+"cloud-azure__messaging-service-bus-queues-topics-sessions-dlq": `
+<p class="lead"><strong>Azure Service Bus</strong> is Azure's enterprise message broker — the reliable messaging backbone.</p>
+<ul>
+<li><strong>Queues:</strong> point-to-point, competing consumers, at-least-once with peek-lock.</li>
+<li><strong>Topics + subscriptions:</strong> pub/sub — publish once, multiple filtered subscriptions receive.</li>
+<li><strong>Features:</strong> dead-letter queue (poison/expired), sessions (FIFO per session id), duplicate detection, scheduled/deferred messages, transactions.</li>
+</ul>
+<p>For high-throughput streaming use <strong>Event Hubs</strong>; for lightweight event routing use <strong>Event Grid</strong>; Service Bus is for reliable enterprise messaging and commands.</p>
+<div class="say"><strong>Say this:</strong> "Service Bus is Azure's enterprise message broker. Queues give point-to-point competing consumers with peek-lock; topics with subscriptions give pub/sub where you publish once and multiple filtered subscriptions receive. It has dead-letter queues, sessions for FIFO ordering, duplicate detection and scheduled messages. For high-throughput streaming I'd use Event Hubs and Event Grid for lightweight routing, but Service Bus is the choice for reliable enterprise messaging — the backbone for decoupled async in .NET on Azure."</div>
+`,
+
+"cloud-azure__storage-blob-queue-table-azure-sql-cosmos-db": `
+<p class="lead">Azure data services.</p>
+<ul>
+<li><strong>Azure Storage:</strong> Blob (object storage, hot/cool/archive tiers), Queue (simple queue), Table (NoSQL key-value), Files (SMB shares).</li>
+<li><strong>Azure SQL:</strong> managed SQL Server (PaaS) — the default relational store; Managed Instance for near-full compatibility.</li>
+<li><strong>Cosmos DB:</strong> globally-distributed, multi-model NoSQL — single-digit-ms latency, elastic scale, <strong>5 tunable consistency levels</strong> (strong → eventual), multiple APIs.</li>
+</ul>
+<p>Blob for files, Azure SQL for relational/transactional, Cosmos for global-scale NoSQL — where the <strong>partition key</strong> choice is critical.</p>
+<div class="say"><strong>Say this:</strong> "Azure Storage covers Blob for object storage with hot/cool/archive tiers, plus Queue, Table and Files. Azure SQL is managed SQL Server — the default relational store, with Managed Instance for near-full compatibility. Cosmos DB is globally-distributed multi-model NoSQL with single-digit-millisecond latency, elastic scale and five tunable consistency levels. So Blob for files, Azure SQL for relational data, and Cosmos for global-scale low-latency NoSQL — where the partition key choice is critical."</div>
+`,
+
+"cloud-azure__identity-secrets-key-vault-managed-identity-entra-id-azure-ad": `
+<p class="lead">The passwordless security trio.</p>
+<ul>
+<li><strong>Entra ID</strong> (formerly Azure AD): Azure's identity provider — authenticates users and apps (OAuth2/OIDC, SSO, MFA, conditional access).</li>
+<li><strong>Managed Identity:</strong> an automatically-managed identity for an Azure resource in Entra ID — so your app authenticates to Key Vault, SQL or Storage with <em>no secret at all</em> (no connection string with a password). System- or user-assigned.</li>
+<li><strong>Key Vault:</strong> secure store for secrets, keys and certificates — centralized, RBAC-controlled, audited, rotatable.</li>
+</ul>
+<p>The pattern: the app uses its managed identity to read from Key Vault and connect to services — eliminating stored credentials.</p>
+<div class="say"><strong>Say this:</strong> "Entra ID, formerly Azure AD, is the identity provider, authenticating users and apps with OAuth, SSO and MFA. A managed identity is an automatically-managed identity for an Azure resource, so my app authenticates to Key Vault, SQL or Storage with no secret — no connection string with a password. Key Vault securely stores secrets, keys and certificates, access-controlled and audited. The pattern is the app uses its managed identity to read from Key Vault and connect to services — passwordless is the modern Azure baseline."</div>
+`,
+
+"cloud-azure__networking-vnet-private-endpoints-app-gateway-front-door": `
+<p class="lead">Azure networking building blocks.</p>
+<ul>
+<li><strong>VNet:</strong> your private network — subnets + NSGs (firewall rules) to isolate and segment resources.</li>
+<li><strong>Private Endpoint:</strong> a private IP in your VNet for a PaaS service (Storage, SQL, Key Vault) so traffic stays off the public internet.</li>
+<li><strong>Application Gateway:</strong> regional L7 load balancer with WAF, path/host routing, TLS termination.</li>
+<li><strong>Front Door:</strong> global L7 entry point / CDN — global load balancing, WAF, caching, routing across regions, close to users.</li>
+</ul>
+<p>App Gateway for regional L7 + WAF, Front Door for global routing/CDN, Private Endpoints to lock PaaS down to your VNet.</p>
+<div class="say"><strong>Say this:</strong> "A VNet is my private network with subnets and network security groups to segment resources. A Private Endpoint gives a PaaS service like SQL a private IP in my VNet so traffic stays off the public internet. Application Gateway is a regional Layer-7 load balancer with a WAF and path routing; Front Door is the global Layer-7 entry point and CDN with global load balancing and caching close to users. So App Gateway for regional L7 plus WAF, Front Door for global routing, and Private Endpoints to lock down PaaS."</div>
+`,
+
+"cloud-azure__observability-application-insights-log-analytics-azure-monitor": `
+<p class="lead">Azure's observability stack.</p>
+<ul>
+<li><strong>Azure Monitor:</strong> the umbrella platform collecting metrics and logs from all resources and apps.</li>
+<li><strong>Log Analytics:</strong> the log store + query engine — queried with <strong>KQL</strong> (Kusto).</li>
+<li><strong>Application Insights:</strong> the APM for apps — auto-collects requests, dependencies, exceptions, traces, and distributed traces; its data lives in Log Analytics.</li>
+</ul>
+<p>On top: metric + KQL-based alerts, dashboards/workbooks, the application map, and end-to-end transaction views.</p>
+<div class="say"><strong>Say this:</strong> "Azure Monitor is the umbrella collecting metrics and logs from all resources and apps. Log Analytics is the log store and query engine, queried with KQL. Application Insights is the APM for apps, auto-collecting requests, dependencies, exceptions and distributed traces, with its data in Log Analytics. On top I get metric and KQL-based alerts, dashboards, the application map, and end-to-end transaction views. So App Insights for app telemetry, Log Analytics for querying, Azure Monitor for platform metrics and alerting — correlated by operation id."</div>
+`,
+
+"cloud-azure__resilience-availability-zones-regions-scaling-slas": `
+<p class="lead">Building resilient Azure workloads.</p>
+<ul>
+<li><strong>Availability Zones:</strong> physically separate datacenters within a region — deploy zone-redundant so a zone failure doesn't take you down.</li>
+<li><strong>Regions / paired regions:</strong> deploy to multiple regions for disaster recovery, active-active or active-passive, with geo-replication.</li>
+<li><strong>Scaling:</strong> scale out (auto-scale rules on metrics) + up; design stateless to scale horizontally.</li>
+</ul>
+<div class="warn"><strong>SLAs multiply:</strong> each service publishes an SLA (e.g. 99.95%); your end-to-end SLA is the <em>product</em> of your dependencies' — a chain multiplies down. Zones and redundancy raise it.</div>
+<div class="say"><strong>Say this:</strong> "For resilience I use availability zones — physically separate datacenters in a region — so a zone failure doesn't take me down, and multiple regions with geo-replication for DR. I design stateless to scale out with autoscale on metrics. On SLAs, each service publishes one and my end-to-end SLA is the product of my dependencies', so a chain multiplies down — zones and redundancy raise it. I design for the target: zone-redundant for HA, multi-region for DR with RPO and RTO in mind."</div>
+`,
+
+"cloud-azure__governance-rbac-tags-azure-policy-cost-management": `
+<p class="lead">Governing an Azure estate at scale.</p>
+<ul>
+<li><strong>RBAC:</strong> least-privilege access via roles (Reader, Contributor, custom) at scopes (subscription/resource group/resource) to users/groups/managed identities.</li>
+<li><strong>Tags:</strong> key-value metadata (cost center, environment, owner) for organization, cost allocation and policy targeting.</li>
+<li><strong>Azure Policy:</strong> enforce guardrails across resources (allowed regions, required tags, enforced encryption) — audit or deny non-compliant resources.</li>
+<li><strong>Cost Management:</strong> track, budget and alert on spend by tag/resource group.</li>
+</ul>
+<p>Structure + access + guardrails + accountability keeps a large estate secure, compliant, and cost-controlled.</p>
+<div class="say"><strong>Say this:</strong> "I govern an Azure estate with four things: RBAC grants least-privilege access via roles at subscription, resource-group or resource scope; tags are metadata like cost center and environment for organization and cost allocation; Azure Policy enforces guardrails like allowed regions, required tags or enforced encryption, auditing or denying non-compliant resources; and Cost Management tracks and budgets spend by tag with alerts. Together they keep a large estate secure, compliant and cost-controlled."</div>
+`,
+
+"cloud-aws__compute-ec2-ecs-eks-lambda-fargate-when-each": `
+<p class="lead">AWS compute spans the same abstraction spectrum as Azure — pick by control vs management overhead.</p>
+<ul>
+<li><strong>EC2:</strong> raw virtual machines — full control, you patch and scale. The IaaS baseline.</li>
+<li><strong>Lambda:</strong> serverless functions — event-driven, scale to zero, pay per invocation/duration. For glue, event processing, APIs with spiky load; watch cold starts and the 15-min limit.</li>
+<li><strong>ECS:</strong> AWS's own container orchestrator — simpler than K8s, deep AWS integration.</li>
+<li><strong>EKS:</strong> managed Kubernetes — full K8s for portability/complex orchestration.</li>
+<li><strong>Fargate:</strong> serverless compute <em>for</em> ECS/EKS — run containers without managing EC2 nodes.</li>
+</ul>
+<p>Spectrum: EC2 → ECS/EKS on Fargate → Lambda.</p>
+<div class="say"><strong>Say this:</strong> "EC2 is raw VMs with full control — the IaaS baseline. Lambda is serverless functions, event-driven and scale-to-zero, for glue and spiky APIs, watching cold starts and the 15-minute limit. ECS is AWS's own container orchestrator, simpler than Kubernetes; EKS is managed Kubernetes for portability and complex orchestration. Fargate is serverless compute for ECS or EKS so I run containers without managing nodes. I pick along the spectrum from EC2 to Lambda by how much control I need versus overhead — mostly Fargate-backed ECS for services and Lambda for events."</div>
+`,
+
+"cloud-aws__messaging-sqs-sns-eventbridge-kinesis": `
+<p class="lead">AWS's messaging services, each for a different pattern.</p>
+<ul>
+<li><strong>SQS:</strong> managed queue — point-to-point, competing consumers, at-least-once; FIFO queues for ordering/dedup. Has a dead-letter queue.</li>
+<li><strong>SNS:</strong> pub/sub topics — fan-out one message to many subscribers (SQS queues, Lambda, HTTP, email). Often <strong>SNS→SQS fan-out</strong>.</li>
+<li><strong>EventBridge:</strong> event bus with content-based routing rules and schemas — for event-driven architectures and SaaS/AWS-service events.</li>
+<li><strong>Kinesis:</strong> high-throughput streaming (ordered shards, replay, multiple consumers) — the Kafka-equivalent for real-time analytics/event streams.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "SQS is the managed queue — point-to-point competing consumers, at-least-once, with FIFO queues for ordering and a dead-letter queue. SNS is pub/sub topics that fan a message out to many subscribers, often SNS to SQS for fan-out. EventBridge is an event bus with content-based routing rules and schemas for event-driven architectures and SaaS events. Kinesis is high-throughput ordered streaming with replay — the Kafka equivalent for real-time analytics. So SQS for work queues, SNS/EventBridge for events, Kinesis for streams."</div>
+`,
+
+"cloud-aws__storage-data-s3-rds-aurora-dynamodb-elasticache": `
+<p class="lead">AWS data services across relational, NoSQL, object and cache.</p>
+<ul>
+<li><strong>S3:</strong> object storage — effectively unlimited, durable (11 nines), storage classes/lifecycle tiering. For files, backups, data lakes, static assets.</li>
+<li><strong>RDS:</strong> managed relational (Postgres, SQL Server, MySQL…) — PaaS databases.</li>
+<li><strong>Aurora:</strong> AWS's cloud-native MySQL/Postgres-compatible engine — faster, auto-scaling storage, read replicas.</li>
+<li><strong>DynamoDB:</strong> managed NoSQL key-value/document — single-digit-ms at any scale; the <strong>partition key</strong> choice is critical; on-demand or provisioned capacity.</li>
+<li><strong>ElastiCache:</strong> managed Redis/Memcached for caching.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "S3 is object storage — effectively unlimited, eleven-nines durable, with lifecycle tiering, for files, backups and data lakes. RDS is managed relational databases like Postgres and SQL Server; Aurora is AWS's cloud-native MySQL/Postgres-compatible engine with auto-scaling storage and read replicas. DynamoDB is managed NoSQL, single-digit-millisecond at any scale, where the partition key choice is critical. ElastiCache is managed Redis for caching. So S3 for objects, RDS/Aurora for relational, DynamoDB for scale NoSQL, ElastiCache for cache."</div>
+`,
+
+"cloud-aws__identity-secrets-iam-roles-secrets-manager-kms": `
+<p class="lead">AWS's security foundation.</p>
+<ul>
+<li><strong>IAM:</strong> the authorization system — policies (JSON) grant least-privilege permissions to users, groups and <strong>roles</strong>. An IAM <em>role</em> assumed by an EC2/ECS/Lambda resource lets the app call AWS services with <em>no stored credentials</em> (temporary rotated tokens) — the AWS equivalent of a managed identity.</li>
+<li><strong>Secrets Manager:</strong> stores secrets (DB passwords, API keys) with automatic rotation; Parameter Store is the lighter-weight alternative.</li>
+<li><strong>KMS:</strong> managed encryption keys for encryption at rest across S3, RDS, EBS, etc., with audit via CloudTrail.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "IAM is the authorization system — JSON policies grant least-privilege permissions to users, groups and roles. A role assumed by an EC2, ECS or Lambda resource lets the app call AWS services with no stored credentials, using temporary rotated tokens — the equivalent of a managed identity. Secrets Manager stores secrets like DB passwords with automatic rotation, with Parameter Store as the lighter option. KMS manages encryption keys for encryption at rest across S3, RDS and EBS, audited through CloudTrail. The baseline is roles plus Secrets Manager, never hard-coded keys."</div>
+`,
+
+"cloud-aws__networking-vpc-alb-nlb-api-gateway-cloudfront": `
+<p class="lead">AWS networking building blocks.</p>
+<ul>
+<li><strong>VPC:</strong> your private network — subnets (public/private), security groups and NACLs, NAT gateways to isolate and segment.</li>
+<li><strong>ALB:</strong> Application Load Balancer — L7, path/host routing, TLS termination, for HTTP services.</li>
+<li><strong>NLB:</strong> Network Load Balancer — L4, ultra-high throughput/low latency, static IPs, for TCP/UDP.</li>
+<li><strong>API Gateway:</strong> managed API front door — throttling, auth, API keys, request mapping, often fronting Lambda.</li>
+<li><strong>CloudFront:</strong> global CDN — caches content at edge locations close to users, with WAF.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "A VPC is my private network with public and private subnets, security groups and NAT gateways. The ALB is a Layer-7 load balancer with path and host routing and TLS termination for HTTP; the NLB is Layer-4 for ultra-high throughput TCP with static IPs. API Gateway is a managed API front door with throttling, auth and API keys, often fronting Lambda. CloudFront is the global CDN caching at edge locations with a WAF. So ALB for HTTP services, API Gateway for managed APIs, CloudFront for global edge delivery, all inside a segmented VPC."</div>
+`,
+
+"cloud-aws__observability-cloudwatch-x-ray": `
+<p class="lead">AWS's native observability stack.</p>
+<ul>
+<li><strong>CloudWatch:</strong> the umbrella — metrics (from all AWS services + custom), logs (CloudWatch Logs with Logs Insights querying), alarms (threshold/anomaly → SNS/auto-scaling actions), and dashboards.</li>
+<li><strong>X-Ray:</strong> distributed tracing — traces a request across services (API Gateway → Lambda → DynamoDB), shows the service map and latency breakdown, integrates with OpenTelemetry.</li>
+</ul>
+<p>CloudTrail (separate) audits <em>who did what</em> in the AWS account. Metrics/logs/alarms in CloudWatch, traces in X-Ray.</p>
+<div class="say"><strong>Say this:</strong> "CloudWatch is the umbrella — metrics from all AWS services plus custom, logs with Logs Insights querying, alarms on thresholds or anomalies that trigger SNS or auto-scaling, and dashboards. X-Ray is distributed tracing, following a request across API Gateway, Lambda and DynamoDB with a service map and latency breakdown, and it integrates with OpenTelemetry. CloudTrail, separately, audits who did what in the account. So CloudWatch for metrics, logs and alarms, X-Ray for traces — the AWS parallel to Azure Monitor and App Insights."</div>
+`,
+
+"cloud-aws__resilience-multi-az-regions-auto-scaling": `
+<p class="lead">Building resilient AWS workloads.</p>
+<ul>
+<li><strong>Availability Zones:</strong> isolated datacenters within a region — deploy across multiple AZs (Multi-AZ RDS, ASG across AZs) so one AZ failing doesn't take you down.</li>
+<li><strong>Regions:</strong> deploy to multiple regions for DR — active-passive with Route 53 failover/health checks, or active-active, plus cross-region replication (S3, DynamoDB global tables, Aurora global).</li>
+<li><strong>Auto Scaling Groups:</strong> scale EC2/capacity out on metrics; design stateless to scale horizontally.</li>
+</ul>
+<div class="warn"><strong>SLAs multiply:</strong> end-to-end availability is the product of your dependencies' SLAs; Multi-AZ and redundancy raise it. Define RPO/RTO and design to them.</div>
+<div class="say"><strong>Say this:</strong> "For resilience I spread across availability zones — isolated datacenters in a region — with Multi-AZ RDS and auto-scaling groups across AZs so one AZ failing doesn't take me down. For disaster recovery I go multi-region: active-passive with Route 53 health-check failover or active-active, plus cross-region replication like DynamoDB global tables and S3 replication. I design stateless to auto-scale on metrics. SLAs multiply across dependencies, so I size redundancy to the RPO and RTO the business needs."</div>
+`,
+
+"cloud-aws__azure-aws-service-mapping": `
+<p class="lead">The two clouds mirror each other — knowing the mapping lets you move between them fast.</p>
+<table>
+<tr><th>Concept</th><th>Azure</th><th>AWS</th></tr>
+<tr><td>Managed web PaaS</td><td>App Service</td><td>Elastic Beanstalk / App Runner</td></tr>
+<tr><td>Serverless functions</td><td>Functions</td><td>Lambda</td></tr>
+<tr><td>Managed Kubernetes</td><td>AKS</td><td>EKS</td></tr>
+<tr><td>Serverless containers</td><td>Container Apps</td><td>Fargate</td></tr>
+<tr><td>Object storage</td><td>Blob Storage</td><td>S3</td></tr>
+<tr><td>Managed relational</td><td>Azure SQL</td><td>RDS / Aurora</td></tr>
+<tr><td>Global NoSQL</td><td>Cosmos DB</td><td>DynamoDB</td></tr>
+<tr><td>Cache</td><td>Azure Cache for Redis</td><td>ElastiCache</td></tr>
+<tr><td>Enterprise messaging</td><td>Service Bus</td><td>SQS / SNS</td></tr>
+<tr><td>Event streaming</td><td>Event Hubs</td><td>Kinesis</td></tr>
+<tr><td>Event routing</td><td>Event Grid</td><td>EventBridge</td></tr>
+<tr><td>Secrets</td><td>Key Vault</td><td>Secrets Manager / KMS</td></tr>
+<tr><td>Workload identity</td><td>Managed Identity</td><td>IAM Role</td></tr>
+<tr><td>Identity provider</td><td>Entra ID</td><td>IAM / Cognito</td></tr>
+<tr><td>APM / tracing</td><td>App Insights</td><td>X-Ray</td></tr>
+<tr><td>Metrics/logs</td><td>Azure Monitor</td><td>CloudWatch</td></tr>
+<tr><td>CDN</td><td>Front Door</td><td>CloudFront</td></tr>
+<tr><td>Private network</td><td>VNet</td><td>VPC</td></tr>
+</table>
+<div class="say"><strong>Say this:</strong> "The clouds mirror each other, so I think in concepts. Functions maps to Lambda, AKS to EKS, Container Apps to Fargate; Blob to S3, Azure SQL to RDS and Aurora, Cosmos to DynamoDB, Redis to ElastiCache. Service Bus maps to SQS and SNS, Event Hubs to Kinesis, Event Grid to EventBridge. Key Vault to Secrets Manager, Managed Identity to IAM roles, App Insights to X-Ray, Azure Monitor to CloudWatch, Front Door to CloudFront, VNet to VPC. Once you know the concept, picking it up on the other cloud is just learning names."</div>
+`,
+
+"llm-genai-fundamentals__llm-basics-tokens-context-window-temperature-top-p": `
+<p class="lead">An <strong>LLM</strong> predicts the next <strong>token</strong> given the preceding tokens — everything else is built on that.</p>
+<ul>
+<li><strong>Tokens:</strong> text is split into tokens (~¾ of a word); the model reads and emits tokens. You pay per token and limits are in tokens.</li>
+<li><strong>Context window:</strong> the max tokens (prompt + output) the model can attend to at once. Exceed it and you must truncate/summarize/retrieve. Everything the model "knows" in a call must fit here.</li>
+<li><strong>Temperature:</strong> randomness — 0 = deterministic/focused (extraction, classification), higher = more varied/creative. <strong>top-p</strong> (nucleus) samples from the smallest set of tokens whose probability sums to p. Tune one, usually temperature.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "An LLM predicts the next token given the preceding ones. Text is split into tokens, roughly three-quarters of a word, and I pay and hit limits per token. The context window is the max tokens of prompt plus output the model can attend to at once — exceed it and I truncate, summarize or retrieve. Temperature controls randomness: zero is deterministic for extraction and classification, higher is more creative; top-p samples from the smallest set of tokens summing to p. I usually tune temperature and set it low for structured tasks."</div>
+`,
+
+"llm-genai-fundamentals__prompt-engineering-system-user-few-shot-chain-of-thought": `
+<p class="lead">Prompt engineering is shaping the input to get reliable output — the cheapest lever before RAG or fine-tuning.</p>
+<ul>
+<li><strong>System vs user:</strong> the <em>system</em> message sets role, rules and output format (persistent instructions); <em>user</em> messages are the task/data. Put constraints in the system prompt.</li>
+<li><strong>Few-shot:</strong> include a handful of input→output examples so the model matches the pattern/format — far more reliable than describing it.</li>
+<li><strong>Chain-of-thought:</strong> ask the model to reason step-by-step before answering — improves accuracy on multi-step/reasoning tasks (for final-answer-only, keep the reasoning hidden or use a reasoning model).</li>
+</ul>
+<p>Also: be explicit, give the format, set boundaries ("if unsure, say so"), and iterate against evals.</p>
+<div class="say"><strong>Say this:</strong> "Prompt engineering is the cheapest lever before RAG or fine-tuning. I put persistent rules, role and output format in the system message and the task and data in the user message. Few-shot examples — a handful of input-output pairs — make format and behavior far more reliable than describing them. Chain-of-thought, asking the model to reason step by step, improves multi-step accuracy. I'm explicit, specify the exact format, set boundaries like 'if unsure, say so', and iterate against an eval set rather than by vibes."</div>
+`,
+
+"llm-genai-fundamentals__hallucinations-grounding-guardrails": `
+<p class="lead">A <strong>hallucination</strong> is the model producing fluent, confident, but false content — because it predicts plausible text, not truth.</p>
+<ul>
+<li><strong>Grounding:</strong> give the model the facts in-context (RAG, tool results) and instruct it to answer <em>only</em> from them and cite sources — the single biggest reducer. "If it's not in the context, say you don't know."</li>
+<li><strong>Guardrails:</strong> validate inputs and outputs — schema/format checks, allow/deny lists, a moderation/classifier pass, confidence thresholds, and a second LLM or rules to check the answer.</li>
+</ul>
+<p>Design assuming it can be wrong: keep humans in the loop for high-stakes actions, constrain with structured outputs, and make tool calls (not free text) do consequential things.</p>
+<div class="say"><strong>Say this:</strong> "A hallucination is fluent, confident, false output — the model predicts plausible text, not truth. The biggest reducer is grounding: give it the facts in-context via RAG or tools and instruct it to answer only from them and cite sources, saying 'I don't know' when they're absent. On top I add guardrails — schema validation on outputs, moderation passes, allow-lists, and sometimes a second model to check the answer. I design assuming it can be wrong: humans in the loop for high-stakes actions and structured tool calls, not free text, for consequential operations."</div>
+`,
+
+"llm-genai-fundamentals__embeddings-semantic-similarity": `
+<p class="lead">An <strong>embedding</strong> turns text into a fixed-length vector of numbers so that <em>semantically similar</em> text lands close together in vector space.</p>
+<ul>
+<li>"car" and "automobile" get nearby vectors even with no shared words — it captures meaning, not keywords.</li>
+<li><strong>Similarity</strong> is measured by the angle/distance between vectors — usually <strong>cosine similarity</strong> (cosine of the angle; 1 = identical direction).</li>
+</ul>
+<p>Embeddings power semantic search, RAG retrieval, clustering, classification, deduplication and recommendations. You embed documents once, store the vectors, and at query time embed the query and find the nearest vectors. Different models produce different dimensioned vectors — keep the same model for queries and documents.</p>
+<div class="say"><strong>Say this:</strong> "An embedding turns text into a fixed-length vector so semantically similar text lands close together — 'car' and 'automobile' get nearby vectors with no shared words, because it captures meaning not keywords. Similarity is the cosine of the angle between vectors. This powers semantic search, RAG retrieval, clustering and recommendations: I embed documents once and store the vectors, then at query time embed the query and find the nearest ones. Critically, I use the same embedding model for documents and queries, since vectors from different models aren't comparable."</div>
+`,
+
+"llm-genai-fundamentals__vector-databases-similarity-search-pgvector-azure-ai-search-pinecone": `
+<p class="lead">A <strong>vector database</strong> stores embeddings and finds the nearest ones to a query vector fast, at scale.</p>
+<ul>
+<li>Exact nearest-neighbor is O(N); vector DBs use <strong>ANN</strong> (approximate nearest neighbor) indexes like <strong>HNSW</strong> or IVF for sub-linear search, trading a little recall for speed.</li>
+<li><strong>pgvector:</strong> a Postgres extension — vectors alongside relational data, no new system (great when you already run Postgres).</li>
+<li><strong>Azure AI Search:</strong> managed, combines vector + keyword (<strong>hybrid</strong>) search with filtering.</li>
+<li><strong>Pinecone:</strong> managed, purpose-built vector DB.</li>
+</ul>
+<p>Key features: metadata filtering (restrict by tenant/date), hybrid search (vector + BM25 keyword, often best), and the distance metric. Choose by scale and whether you want a separate system.</p>
+<div class="say"><strong>Say this:</strong> "A vector database stores embeddings and finds the nearest to a query vector fast. Exact search is linear, so they use approximate nearest-neighbor indexes like HNSW, trading a little recall for big speed. pgvector is a Postgres extension — vectors next to relational data with no new system, my default when I already run Postgres. Azure AI Search is managed and does hybrid vector-plus-keyword search with filtering; Pinecone is a purpose-built managed vector DB. The features that matter are metadata filtering by tenant or date and hybrid search, which usually beats vector alone."</div>
+`,
+
+"llm-genai-fundamentals__retrieval-augmented-generation-rag": `
+<p class="lead"><strong>RAG</strong> gives an LLM your private/current knowledge by <em>retrieving</em> relevant documents and putting them in the prompt as context before generating.</p>
+<ol>
+<li><strong>Ingest (offline):</strong> chunk your documents, embed each chunk, store vectors + text + metadata.</li>
+<li><strong>Retrieve (query time):</strong> embed the question, find the top-k most similar chunks (often hybrid + a re-ranker).</li>
+<li><strong>Augment + generate:</strong> put those chunks in the prompt, instruct the model to answer <em>only</em> from them and cite sources.</li>
+</ol>
+<p>It beats fine-tuning for factual/changing knowledge: no training, update by changing data, sources are citable, and it reduces hallucination via grounding. Quality hinges on <strong>retrieval</strong> — garbage chunks in, garbage answer out.</p>
+<div class="say"><strong>Say this:</strong> "RAG gives an LLM private or current knowledge by retrieving relevant documents and putting them in the prompt before it generates. Offline I chunk documents, embed each chunk, and store the vectors with text and metadata. At query time I embed the question, retrieve the top-k most similar chunks — often hybrid search with a re-ranker — then put them in the prompt and tell the model to answer only from them and cite sources. It beats fine-tuning for factual, changing knowledge because I update by changing data, answers are citable, and grounding cuts hallucination. The whole thing lives or dies on retrieval quality."</div>
+`,
+
+"llm-genai-fundamentals__chunking-indexing-strategies-for-rag": `
+<p class="lead">How you split documents into chunks largely determines RAG quality — the retriever can only return whole chunks.</p>
+<ul>
+<li><strong>Size:</strong> too big dilutes relevance and wastes tokens; too small loses context. Typically a few hundred tokens, with <strong>overlap</strong> so a fact split across a boundary survives.</li>
+<li><strong>Structure-aware:</strong> split on natural boundaries (headings, paragraphs, code blocks) not blind character counts; keep tables/lists intact.</li>
+<li><strong>Enrich:</strong> attach metadata (title, section, date, source) for filtering and citation; optionally prepend a short summary/title to each chunk ("contextual" chunking).</li>
+</ul>
+<p>Advanced: parent-child (retrieve small, return the larger parent for context), and store multiple representations. Match chunking to the content and test retrieval against real queries.</p>
+<div class="say"><strong>Say this:</strong> "Chunking largely decides RAG quality because the retriever returns whole chunks. Too big dilutes relevance and wastes tokens; too small loses context — so a few hundred tokens with overlap so a fact split across a boundary survives. I split on natural boundaries like headings and paragraphs rather than blind character counts, and keep tables intact. I attach metadata — title, section, date, source — for filtering and citation, and sometimes prepend a short summary to each chunk. A useful pattern is parent-child: retrieve the small chunk but feed the larger parent for context. Then I test retrieval against real queries."</div>
+`,
+
+"llm-genai-fundamentals__function-tool-calling": `
+<p class="lead"><strong>Function/tool calling</strong> lets the LLM invoke your code: you describe tools (name, description, JSON-schema parameters), and the model, instead of answering, returns a structured request to call one with arguments.</p>
+<ol>
+<li>You send the tools + the user message.</li>
+<li>The model returns a tool call (which tool, what args) — it doesn't run anything.</li>
+<li><strong>Your code executes</strong> the tool and sends the result back.</li>
+<li>The model uses the result to answer (or calls another tool).</li>
+</ol>
+<p>This is how LLMs take actions and fetch live data (query a DB, call an API, do math, trigger RAG). You control execution — validate args, enforce authz, treat the model's requests as untrusted input. It's the foundation of agents.</p>
+<div class="say"><strong>Say this:</strong> "Tool calling lets the model invoke my code. I describe tools with a name, description and JSON-schema parameters; the model, instead of answering, returns a structured request to call one with arguments — it doesn't run anything itself. My code executes the tool and returns the result, and the model uses it to answer or calls another. That's how LLMs take actions and fetch live data — query a database, call an API, do math. Because I control execution, I validate the arguments and enforce authorization, treating the model's requests as untrusted input. It's the foundation of agents."</div>
+`,
+
+"llm-genai-fundamentals__agents-orchestration-planning-tools-memory": `
+<p class="lead">An <strong>agent</strong> is an LLM in a loop that decides which tools to call to accomplish a goal, observes the results, and continues until done — rather than answering in one shot.</p>
+<ul>
+<li><strong>Planning:</strong> the model breaks a goal into steps and chooses tools (ReAct: reason → act → observe, repeat).</li>
+<li><strong>Tools:</strong> what it can do — search, DB queries, APIs, code execution, other agents.</li>
+<li><strong>Memory:</strong> short-term (the conversation/scratchpad in context) and long-term (a vector store it retrieves from across sessions).</li>
+<li><strong>Orchestration:</strong> the runtime loop, tool execution, retries, and stopping conditions; multi-agent setups split roles (planner/worker/critic).</li>
+</ul>
+<div class="warn">Risks: loops, runaway cost, compounding errors, and tools that take real actions — add step limits, budgets, guardrails and human approval for consequential steps.</div>
+<div class="say"><strong>Say this:</strong> "An agent is an LLM in a loop that decides which tools to call toward a goal, observes results, and continues until done. It plans — breaking the goal into steps and choosing tools, the ReAct pattern of reason, act, observe — uses tools like search, DB queries and code execution, and has memory: short-term in the context and long-term in a vector store across sessions. Orchestration is the loop, tool execution, retries and stop conditions, and multi-agent setups split roles like planner, worker and critic. The risks are loops, runaway cost and tools taking real actions, so I add step limits, budgets, guardrails and human approval for consequential steps."</div>
+`,
+
+"llm-genai-fundamentals__fine-tuning-vs-rag-vs-prompting-when-each": `
+<p class="lead">Three ways to adapt an LLM — reach for them in this order (cheapest first).</p>
+<ul>
+<li><strong>Prompting:</strong> instructions + few-shot examples in context. Zero training, instant iteration. Start here; it solves most tasks.</li>
+<li><strong>RAG:</strong> inject relevant knowledge at query time. Use when the model needs <em>facts</em> it doesn't have — private, current, or large/changing knowledge. Updatable, citable, grounded.</li>
+<li><strong>Fine-tuning:</strong> further-train the model's weights on examples. Use to teach <em>behavior/format/style/tone</em> or a narrow task — not to add facts (it bakes them in, can't cite, goes stale). Costly, needs a quality dataset and re-training to update.</li>
+</ul>
+<p>Rule of thumb: <strong>prompting for behavior you can describe, RAG for knowledge, fine-tuning for consistent behavior/style at scale or latency/cost reduction.</strong> They combine — fine-tune for format <em>and</em> RAG for facts.</p>
+<div class="say"><strong>Say this:</strong> "I reach for them cheapest-first. Prompting — instructions and few-shot in context — is zero training and instant iteration, and it solves most tasks, so I start there. RAG injects relevant knowledge at query time, for facts the model doesn't have: private, current or large and changing — updatable, citable and grounded. Fine-tuning further-trains the weights to teach behavior, format, style or a narrow task — not to add facts, because it bakes them in, can't cite and goes stale, and it's costly to update. So prompting for describable behavior, RAG for knowledge, fine-tuning for consistent style at scale — and they combine."</div>
+`,
+
+"llm-genai-fundamentals__structured-outputs-json-mode-schema-validation": `
+<p class="lead">To use an LLM in a pipeline you usually need machine-readable output, not prose — <strong>structured outputs</strong>.</p>
+<ul>
+<li><strong>JSON mode:</strong> the model is constrained to emit valid JSON.</li>
+<li><strong>Schema-constrained / structured outputs:</strong> you supply a JSON schema and the decoding is constrained so output <em>always</em> matches it (right fields, types, enums) — the modern, reliable approach (OpenAI structured outputs, tool-call args).</li>
+<li><strong>Always validate</strong> against your schema on receipt (e.g. deserialize to a typed C# record); never trust raw model text in code paths.</li>
+</ul>
+<p>In .NET, bind to a strongly-typed record. Prefer schema-constrained generation + deserialization over regex/string parsing. Keep schemas tight (enums, required fields) to reduce errors.</p>
+<div class="say"><strong>Say this:</strong> "In a pipeline I need machine-readable output, not prose. JSON mode constrains the model to valid JSON; structured outputs go further — I supply a JSON schema and decoding is constrained so output always matches it, the right fields, types and enums, which is the reliable modern approach and the same mechanism as tool-call arguments. I still validate on receipt by deserializing to a typed C# record, and never trust raw model text in code paths. I keep schemas tight with enums and required fields to cut errors, and prefer this over regex parsing."</div>
+`,
+
+"llm-genai-fundamentals__evaluating-testing-llm-apps": `
+<p class="lead">LLM outputs are non-deterministic, so you can't unit-test them with exact asserts — you build an <strong>eval</strong> harness.</p>
+<ul>
+<li><strong>Dataset:</strong> a curated set of representative inputs with expected outputs or rubrics (grow it from real/failed cases).</li>
+<li><strong>Metrics:</strong> for RAG — retrieval recall/precision, groundedness/faithfulness, answer relevance; for tasks — exact match, similarity, or an <strong>LLM-as-judge</strong> scoring against a rubric; plus latency and cost.</li>
+<li><strong>Process:</strong> run evals in CI on every prompt/model/data change (catch regressions), track scores over time, and keep a human review loop for high-stakes.</li>
+</ul>
+<p>Treat prompts and models like code: version them, eval before shipping, monitor production outputs.</p>
+<div class="say"><strong>Say this:</strong> "LLM outputs are non-deterministic, so instead of exact-match unit tests I build an eval harness. I curate a dataset of representative inputs with expected outputs or rubrics, grown from real and failed cases. For RAG I measure retrieval precision and recall, groundedness and answer relevance; for tasks, similarity or LLM-as-judge against a rubric, plus latency and cost. I run evals in CI on every prompt, model or data change to catch regressions, track scores over time, and keep human review for high-stakes. I treat prompts and models like code — versioned and eval-gated before shipping."</div>
+`,
+
+"llm-genai-fundamentals__cost-latency-token-limits-caching": `
+<p class="lead">Production LLM apps are governed by tokens — they drive cost, latency and limits.</p>
+<ul>
+<li><strong>Cost:</strong> priced per input + output token; big contexts (RAG, long history) and verbose output add up. Trim context, cap output, pick the smallest model that passes evals, and route easy requests to cheaper models.</li>
+<li><strong>Latency:</strong> grows with output tokens (generated one at a time) and context size. <strong>Stream</strong> tokens for perceived speed; keep prompts tight.</li>
+<li><strong>Limits:</strong> context-window cap and rate limits (RPM/TPM) — handle with retry/backoff, queuing, and batching.</li>
+<li><strong>Caching:</strong> <em>prompt caching</em> reuses a cached prefix (system prompt, few-shot, retrieved docs) cheaply; <em>semantic caching</em> returns a stored answer for a near-identical query (embedding match).</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "LLM apps are governed by tokens — they drive cost, latency and limits. Cost is per input and output token, so big RAG contexts and verbose output add up; I trim context, cap output, pick the smallest model that passes evals, and route easy requests to cheaper models. Latency grows with output tokens since they're generated one at a time, so I stream for perceived speed and keep prompts tight. For limits I handle context-window caps and rate limits with backoff and queuing. And I cache: prompt caching reuses a cached prefix like the system prompt and retrieved docs cheaply, and semantic caching returns a stored answer for a near-identical query."</div>
+`,
+
+"llm-genai-fundamentals__prompt-injection-llm-security-owasp-llm-top-10": `
+<p class="lead"><strong>Prompt injection</strong> is the top LLM security risk: untrusted text the model reads (user input, a retrieved document, a web page, a tool result) contains instructions that hijack its behavior.</p>
+<ul>
+<li><strong>Direct:</strong> the user says "ignore your instructions and…".</li>
+<li><strong>Indirect:</strong> malicious instructions hidden in content the model later ingests via RAG/tools — the dangerous one, because it reaches the model without the user typing it.</li>
+</ul>
+<p><strong>Defenses:</strong> treat all model input and output as untrusted; don't give the model authority it can be tricked into misusing — enforce authz in <em>your</em> code, not the prompt; least-privilege tools; human approval for consequential actions; separate data from instructions; output validation/moderation; and keep secrets out of the context. The OWASP LLM Top 10 also covers insecure output handling, sensitive-info disclosure, excessive agency, and supply chain.</p>
+<div class="say"><strong>Say this:</strong> "Prompt injection is the top LLM risk: untrusted text the model reads — user input, a retrieved document, a tool result — contains instructions that hijack it. Direct is the user saying 'ignore your instructions'; indirect is instructions hidden in content the model ingests via RAG or tools, which is the dangerous one because it reaches the model without the user typing it. My defenses: treat all model input and output as untrusted, enforce authorization in my own code not the prompt, give tools least privilege, require human approval for consequential actions, validate outputs, and keep secrets out of context. That plus the rest of the OWASP LLM Top 10 — excessive agency, insecure output handling, data disclosure."</div>
+`,
+
+"llm-genai-fundamentals__responsible-ai-privacy-pii-bias-data-residency": `
+<p class="lead">Shipping AI responsibly means handling data, fairness and compliance deliberately.</p>
+<ul>
+<li><strong>Privacy / PII:</strong> don't send personal or sensitive data to a model/provider unnecessarily — minimize, redact/anonymize before sending, and check whether the provider trains on or retains your data (use no-retention/enterprise tiers). Get consent where required.</li>
+<li><strong>Bias:</strong> models reflect training-data bias; test across demographics, watch for unfair outcomes in consequential decisions, keep a human in the loop, and be transparent that AI is involved.</li>
+<li><strong>Data residency:</strong> regulations (GDPR) may require data stay in a region — use a provider/region that keeps processing in-geography, and know where prompts are processed.</li>
+</ul>
+<p>Also: content moderation, clear disclosure, an audit trail, and a way for users to contest AI decisions.</p>
+<div class="say"><strong>Say this:</strong> "Responsible AI means handling data, fairness and compliance deliberately. For privacy I minimize and redact PII before sending to a provider, and check whether they retain or train on my data, using no-retention enterprise tiers. Models reflect training bias, so I test across demographics, keep a human in the loop for consequential decisions, and disclose that AI is involved. For data residency, GDPR may require data stay in-region, so I pick a provider and region that keep processing in-geography. On top I add moderation, an audit trail, and a way for users to contest AI decisions."</div>
+`,
+
+"building-ai-features-in-net__azure-openai-openai-sdk-in-net": `
+<p class="lead">The direct way to call models from .NET is the official SDK — <code>Azure.AI.OpenAI</code> (Azure-hosted) or <code>OpenAI</code> (openai.com), which share an API shape.</p>
+<ul>
+<li>You create a client, build a chat request (system + user messages, temperature, max tokens), and call completion — sync or <strong>streaming</strong>.</li>
+<li><strong>Azure OpenAI</strong> gives you the same models inside your Azure tenant: private networking, your region (data residency), Entra ID / managed-identity auth (no API key), and enterprise SLAs/content filters. You deploy a model under a <em>deployment name</em>.</li>
+<li>Supports tool/function calling, structured outputs, and embeddings from the same client.</li>
+</ul>
+<p>Register the client in DI, auth via managed identity (secrets in Key Vault), and add resilience (retry/backoff) around rate limits.</p>
+<div class="say"><strong>Say this:</strong> "The direct path in .NET is the official SDK — Azure.AI.OpenAI for Azure-hosted or the OpenAI package — which share an API shape. I create a client, build a chat request with system and user messages, temperature and max tokens, and call completion, sync or streaming. Azure OpenAI gives the same models inside my tenant with private networking, my region for data residency, managed-identity auth so no API key, and enterprise content filters — I deploy a model under a deployment name. The same client does tool calling, structured outputs and embeddings. I register it in DI and wrap it with retry and backoff for rate limits."</div>
+`,
+
+"building-ai-features-in-net__microsoft-extensions-ai-ichatclient-abstraction": `
+<p class="lead"><code>Microsoft.Extensions.AI</code> is Microsoft's unifying abstraction — an <code>IChatClient</code> (and <code>IEmbeddingGenerator</code>) interface so your code is <strong>provider-agnostic</strong>.</p>
+<ul>
+<li>Write against <code>IChatClient</code>; swap the backing provider (Azure OpenAI, OpenAI, Ollama, others) without changing app code.</li>
+<li>It's <strong>middleware/pipeline</strong>-based (like ASP.NET Core): wrap the client with cross-cutting layers — logging, telemetry (OpenTelemetry), caching, function-invocation, rate-limiting — by composition.</li>
+<li>First-class DI registration and a standard shape for tool calling.</li>
+</ul>
+<p>It's the recommended .NET foundation: it decouples you from a vendor and gives built-in observability and tool-calling, with Semantic Kernel building on top.</p>
+<div class="say"><strong>Say this:</strong> "Microsoft.Extensions.AI is the unifying abstraction — an IChatClient and IEmbeddingGenerator interface so my code is provider-agnostic. I write against IChatClient and swap the backing provider — Azure OpenAI, OpenAI, Ollama — without changing app code. It's pipeline-based like ASP.NET Core middleware, so I wrap the client with cross-cutting layers — logging, OpenTelemetry, caching, function invocation, rate-limiting — by composition. It has first-class DI and a standard tool-calling shape. It's the recommended .NET foundation: it decouples me from a vendor and gives observability and tool-calling out of the box, with Semantic Kernel building on top."</div>
+`,
+
+"building-ai-features-in-net__semantic-kernel-plugins-planners-memory": `
+<p class="lead"><strong>Semantic Kernel</strong> is Microsoft's SDK for building AI agents/orchestration in .NET — a layer above raw model calls.</p>
+<ul>
+<li><strong>Kernel:</strong> the container that holds services (chat, embeddings) and plugins and runs the orchestration.</li>
+<li><strong>Plugins / functions:</strong> capabilities the model can call — native C# methods (<code>[KernelFunction]</code>) or prompt templates — exposed as tools for function calling.</li>
+<li><strong>Planners:</strong> let the model plan a sequence of plugin calls to reach a goal (now largely automatic via function calling / the agent loop).</li>
+<li><strong>Memory:</strong> embeddings + a vector store connector for semantic recall (RAG) and conversation history.</li>
+</ul>
+<p>It also has an <strong>Agent Framework</strong> for multi-agent workflows. Use it when you want orchestration, plugins and memory out of the box; use raw <code>IChatClient</code> for simple calls.</p>
+<div class="say"><strong>Say this:</strong> "Semantic Kernel is Microsoft's SDK for AI agents and orchestration in .NET, a layer above raw model calls. The kernel holds services and plugins and runs the orchestration. Plugins are capabilities the model can call — native C# methods marked KernelFunction or prompt templates — exposed as tools. Planners let the model sequence plugin calls toward a goal, now largely automatic through function calling. Memory is embeddings plus a vector-store connector for semantic recall and history. It also has an Agent Framework for multi-agent workflows. I reach for it when I want orchestration, plugins and memory built in, and raw IChatClient for simple calls."</div>
+`,
+
+"building-ai-features-in-net__building-a-rag-pipeline-in-net-ingest-chunk-embed-store-retrieve": `
+<p class="lead">A production RAG pipeline in .NET, end to end.</p>
+<h2>Ingestion (offline / background)</h2>
+<ol>
+<li><strong>Load</strong> documents (blob, DB, SharePoint), extract text (PDF/Office parsers).</li>
+<li><strong>Chunk</strong> with overlap on natural boundaries; attach metadata (source, section, tenant, date).</li>
+<li><strong>Embed</strong> each chunk via <code>IEmbeddingGenerator</code> (batch for throughput).</li>
+<li><strong>Store</strong> vectors + text + metadata in a vector store (pgvector, Azure AI Search).</li>
+</ol>
+<h2>Query (request time)</h2>
+<ol>
+<li>Embed the question; <strong>retrieve</strong> top-k (hybrid + re-rank, with a metadata filter for tenant/authz).</li>
+<li>Build the prompt with the chunks; instruct "answer only from context, cite sources."</li>
+<li>Call the model (streaming); return the answer <strong>with citations</strong>.</li>
+</ol>
+<p>Cross-cutting: run ingestion as a background job/pipeline, cache embeddings, enforce tenant isolation in the filter (not just the prompt), and eval retrieval + groundedness.</p>
+<div class="say"><strong>Say this:</strong> "I split it into ingestion and query. Offline I load documents, extract text, chunk with overlap on natural boundaries with metadata like source, tenant and date, embed each chunk via IEmbeddingGenerator in batches, and store vectors, text and metadata in pgvector or Azure AI Search. At request time I embed the question, retrieve top-k with hybrid search and a re-ranker plus a metadata filter for tenant and authz, build the prompt with the chunks telling the model to answer only from context and cite, then stream the answer with citations. Cross-cutting: ingestion as a background job, cached embeddings, tenant isolation enforced in the filter not the prompt, and evals on retrieval and groundedness."</div>
+`,
+
+"building-ai-features-in-net__model-context-protocol-mcp-tools-for-agents": `
+<p class="lead"><strong>MCP (Model Context Protocol)</strong> is an open standard for connecting AI agents to tools and data through a uniform interface — "USB-C for AI tools."</p>
+<ul>
+<li>An <strong>MCP server</strong> exposes <em>tools</em> (callable functions), <em>resources</em> (readable data) and <em>prompts</em> over a defined protocol (stdio or HTTP/SSE).</li>
+<li>An <strong>MCP client</strong> (the agent host) discovers and calls them — so any MCP-aware model can use any MCP server without bespoke glue.</li>
+<li>In .NET, the <code>ModelContextProtocol</code> SDK lets you build servers (expose your APIs/DB as tools) and clients, and it plugs into <code>Microsoft.Extensions.AI</code> function calling.</li>
+</ul>
+<p>Value: decouples tools from the agent, reuse across hosts, and a standard for discovery. Same security rules apply — the tools run <em>your</em> code, so validate and enforce authz; treat the model's calls as untrusted.</p>
+<div class="say"><strong>Say this:</strong> "MCP, the Model Context Protocol, is an open standard for connecting agents to tools and data through a uniform interface — people call it USB-C for AI tools. An MCP server exposes tools, readable resources and prompts over a defined protocol, stdio or HTTP; an MCP client, the agent host, discovers and calls them, so any MCP-aware model uses any server without bespoke glue. In .NET the ModelContextProtocol SDK builds both servers and clients and plugs into Extensions.AI function calling. The value is decoupling tools from the agent and reuse across hosts. The security rules are unchanged — the tools run my code, so I validate and enforce authz, treating the model's calls as untrusted."</div>
+`,
+
+"building-ai-features-in-net__streaming-responses-cancellation": `
+<p class="lead">Generation is slow (tokens one at a time), so <strong>stream</strong> for a responsive UX and wire up <strong>cancellation</strong> to stop wasted work.</p>
+<ul>
+<li><strong>Streaming:</strong> the SDK returns an <code>IAsyncEnumerable</code> of chunks; <code>await foreach</code> and push each delta to the client as it arrives (SSE / SignalR / gRPC streaming) — the user sees text appear immediately instead of waiting for the whole answer.</li>
+<li><strong>Cancellation:</strong> flow a <code>CancellationToken</code> (ASP.NET Core gives you <code>HttpContext.RequestAborted</code>) into the model call and the <code>await foreach</code> — if the user navigates away or the request is aborted, you stop generating and <em>stop paying</em> for tokens.</li>
+</ul>
+<p>Also: handle partial failures mid-stream, flush/keep-alive for proxies, and accumulate the full text server-side if you need to log or post-process it.</p>
+<div class="say"><strong>Say this:</strong> "Generation is slow because tokens come one at a time, so I stream for a responsive UX and wire up cancellation. For streaming, the SDK returns an IAsyncEnumerable of chunks; I await-foreach and push each delta to the client over SSE or SignalR, so the user sees text appear immediately. For cancellation I flow a CancellationToken — in ASP.NET Core that's HttpContext.RequestAborted — into the model call and the loop, so if the user navigates away I stop generating and stop paying for tokens. I also handle partial failures mid-stream and accumulate the full text server-side when I need to log or post-process it."</div>
+`,
+
+"technical-leadership__a-senior-disagrees-with-your-architectural-decision": `
+<p class="lead">This tests whether you lead through influence and evidence, not authority.</p>
+<ul>
+<li><strong>Listen first:</strong> understand their reasoning fully — they may see a risk you missed. Restate their position so they know you got it.</li>
+<li><strong>Find the real disagreement:</strong> usually it's different priorities (speed vs flexibility) or different assumptions, not facts. Surface those.</li>
+<li><strong>Make it objective:</strong> agree on the criteria that matter (cost, latency, risk, time), evaluate both options against them, spike/prototype if cheap.</li>
+<li><strong>Decide and commit:</strong> if still split, as the lead you make the call, explain the <em>why</em>, and record it (an ADR). "Disagree and commit" — they should be able to support it even if they'd have chosen differently.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I lead through influence, not authority, so I listen first and restate their position to be sure I understand — they may see a risk I missed. Usually the disagreement is different priorities or assumptions, not facts, so I surface those and make it objective: agree the criteria that matter — cost, latency, risk, time — and evaluate both against them, prototyping if it's cheap. If we're still split, as the lead I make the call, explain the why, and record it in an ADR. The principle is disagree and commit — they should be able to get behind it even if they'd have chosen differently."</div>
+`,
+
+"technical-leadership__refactoring-legacy-vs-delivering-features": `
+<p class="lead">This is about balancing long-term health against short-term delivery — and framing it in business terms.</p>
+<ul>
+<li><strong>Never "stop for a big rewrite":</strong> risky, no value shipped, usually fails. Prefer incremental refactoring.</li>
+<li><strong>Tie debt to business pain:</strong> "this module causes 30% of our bugs and doubles delivery time" — make the cost visible to stakeholders, not an abstract "it's messy."</li>
+<li><strong>Refactor opportunistically:</strong> the boy-scout rule (leave code better than you found it) and refactor the area you're about to change anyway.</li>
+<li><strong>Budget it:</strong> allocate a steady slice (e.g. ~20%) each sprint, or fold it into feature estimates. Track debt in a register, prioritize by pain × frequency.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I balance it by framing debt in business terms, not 'the code is messy.' I tie it to pain — 'this module causes a third of our bugs and doubles delivery time' — so stakeholders see the cost. I avoid big-bang rewrites because they ship no value and usually fail; instead I refactor incrementally and opportunistically, improving the area I'm already touching. And I budget it — a steady slice each sprint or folded into estimates — and keep a debt register prioritized by pain times frequency. The goal is sustainable pace, not a choice between features and health."</div>
+`,
+
+"technical-leadership__a-production-incident-during-a-release-coordinate-communicate": `
+<p class="lead">They want to see calm, structured incident command — not heroics.</p>
+<ol>
+<li><strong>Mitigate first:</strong> restore service before diagnosing — roll back the release (the obvious suspect), feature-flag off, or fail over. Stop the bleeding.</li>
+<li><strong>Coordinate:</strong> declare the incident, assign an <strong>incident commander</strong>, a comms lead, and responders; one channel; avoid everyone changing things at once.</li>
+<li><strong>Communicate:</strong> proactive, regular stakeholder/status updates (what's impacted, what we're doing, next update time) — manage the business, not just the tech.</li>
+<li><strong>After:</strong> a blameless postmortem with a timeline, root cause, and action items with owners.</li>
+</ol>
+<div class="say"><strong>Say this:</strong> "I run it as incident command, not heroics. First I mitigate to restore service before diagnosing — roll back the release since it's the obvious suspect, flag it off, or fail over. I declare the incident and assign roles: an incident commander to coordinate, a comms lead, responders, one channel, so people aren't all changing things at once. I communicate proactively — regular updates on impact, what we're doing and the next update time — because I'm managing the business, not just the tech. Afterward I run a blameless postmortem with a timeline, root cause and owned action items so it doesn't recur."</div>
+`,
+
+"technical-leadership__running-code-reviews-mentoring-developers": `
+<p class="lead">Code review is both a quality gate and the main teaching channel — run it to raise the team, not to gatekeep.</p>
+<ul>
+<li><strong>Be kind and specific:</strong> comment on the code, not the person; explain the <em>why</em>; distinguish must-fix from nits (prefix "nit:"); offer, don't command.</li>
+<li><strong>Focus on what matters:</strong> correctness, design, security, readability — let a formatter/linter handle style so review isn't bikeshedding.</li>
+<li><strong>Keep PRs small</strong> for fast, meaningful review; review promptly to avoid blocking.</li>
+<li><strong>Mentoring:</strong> pair on hard reviews, ask questions ("what happens if this is null?") to teach reasoning, give stretch tasks with support, and praise in public / correct in private.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I treat code review as the main teaching channel, not a gate. I'm kind and specific — comment on the code not the person, explain the why, and separate must-fix from nits, which I prefix so intent is clear. I focus on correctness, design, security and readability and let a linter handle style so we're not bikeshedding. I push for small PRs and review promptly so I'm not blocking. For mentoring I pair on hard changes, ask questions like 'what if this is null?' to teach reasoning rather than just giving answers, hand out stretch tasks with support, and praise in public while correcting in private."</div>
+`,
+
+"technical-leadership__communicating-technical-risk-to-non-technical-stakeholders": `
+<p class="lead">The skill is translating technical reality into business language: impact, likelihood, options, cost.</p>
+<ul>
+<li><strong>Lead with impact, not mechanism:</strong> not "we have N+1 queries," but "the page will time out for large customers, risking churn." Speak in money, time, customers, risk.</li>
+<li><strong>Quantify:</strong> likelihood and severity, and what it costs to fix vs not fix. Use ranges and confidence honestly.</li>
+<li><strong>Offer options with trade-offs:</strong> give 2–3 paths (do nothing / quick mitigation / proper fix) with cost and residual risk, and a recommendation — let them decide with eyes open.</li>
+<li><strong>No jargon, and listen:</strong> check understanding; tie to <em>their</em> goals.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I translate technical reality into business language — impact, likelihood, options, cost. I lead with impact, not mechanism: not 'we have N+1 queries' but 'the page times out for large customers and risks churn.' I quantify likelihood and severity and the cost to fix versus not fix, with honest confidence. Then I give two or three options — do nothing, quick mitigation, proper fix — each with cost and residual risk, plus my recommendation, so they decide with eyes open. I drop the jargon, tie it to their goals, and check they actually followed it. The point is informed business decisions, not scaring or bamboozling them."</div>
+`,
+
+"technical-leadership__estimating-work-breaking-down-a-large-feature": `
+<p class="lead">They're assessing how you decompose, estimate under uncertainty, and de-risk.</p>
+<ul>
+<li><strong>Break it down:</strong> split the feature into small, independently shippable slices (vertical slices that each deliver value, not horizontal layers). If you can't estimate it, it's too big — decompose more.</li>
+<li><strong>Estimate relatively:</strong> story points / t-shirt sizes over absolute hours; estimate as a team (planning poker) to surface hidden complexity; include testing, review, deployment, unknowns.</li>
+<li><strong>De-risk early:</strong> spike the unknowns first; identify dependencies and the critical path; sequence the riskiest/most valuable first.</li>
+<li><strong>Communicate uncertainty:</strong> ranges and confidence, not false precision; track velocity to improve forecasts.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I break the feature into small, independently shippable vertical slices that each deliver value — if I can't estimate a piece, it's too big and I decompose further. I estimate relatively with points or t-shirt sizes rather than false-precision hours, as a team with planning poker to surface hidden complexity, and I include testing, review, deployment and unknowns. I de-risk early by spiking the unknowns first and sequencing the riskiest and most valuable work first, mapping dependencies and the critical path. And I communicate ranges and confidence, then track velocity to make the next forecast better."</div>
+`,
+
+"technical-leadership__handling-conflicting-priorities-from-stakeholders": `
+<p class="lead">Multiple stakeholders each want their thing first — the skill is transparent, criteria-based prioritization, not just saying yes to everyone.</p>
+<ul>
+<li><strong>Make trade-offs explicit:</strong> you can't do it all at once; saying yes to everything means nothing ships. Surface the finite capacity.</li>
+<li><strong>Prioritize on shared criteria:</strong> business value, cost of delay, risk, effort, dependencies — a visible framework (WSJF, value vs effort) so it's objective, not political.</li>
+<li><strong>Get stakeholders in one room:</strong> have them rank against each other with the criteria; escalate to a single decision-maker/product owner when they can't agree.</li>
+<li><strong>Communicate the decision and the why,</strong> and revisit as things change.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I handle it with transparent, criteria-based prioritization rather than saying yes to everyone, because yes to everything means nothing ships. I make the finite capacity explicit, then prioritize on shared criteria — business value, cost of delay, risk, effort, dependencies — using a visible framework so it's objective, not political. I get the stakeholders in one room to rank against each other, and escalate to a single decision-maker or product owner when they can't agree. Then I communicate the decision and the why, and revisit as priorities change. My job is to make the trade-off visible, not to absorb it silently."</div>
+`,
+
+"technical-leadership__handling-an-underperforming-developer": `
+<p class="lead">They want empathy plus accountability — diagnose before you judge.</p>
+<ol>
+<li><strong>Understand the cause first:</strong> skill gap, unclear expectations, lack of context, personal issues, wrong-fit role, or disengagement — the fix differs for each. Talk to them privately and listen.</li>
+<li><strong>Set clear expectations:</strong> specific, measurable goals and what "good" looks like; make sure they knew the bar.</li>
+<li><strong>Support:</strong> mentoring, pairing, training, smaller well-scoped tasks to rebuild confidence, regular feedback and check-ins.</li>
+<li><strong>Follow up honestly:</strong> if it doesn't improve after genuine support, have the direct conversation and involve your manager/HR with a documented plan. Fair to them and to the team.</li>
+</ol>
+<div class="say"><strong>Say this:</strong> "I diagnose before I judge. First, privately, I try to understand the cause — a skill gap, unclear expectations, missing context, something personal, or disengagement — because the fix differs for each. I set clear, specific expectations and what good looks like, so I know they knew the bar. Then I support: pairing, mentoring, well-scoped tasks to rebuild confidence, and regular feedback. If it doesn't improve after genuine support, I have the honest direct conversation and involve my manager and HR with a documented plan. It's empathy plus accountability — fair to the person and fair to the team carrying the gap."</div>
+`,
+
+"technical-leadership__giving-difficult-feedback": `
+<p class="lead">Effective feedback is timely, specific, kind, and actionable — delivered to help, not to vent.</p>
+<ul>
+<li><strong>In private, promptly,</strong> and from care ("I want to help you grow").</li>
+<li><strong>Behavior and impact, not character:</strong> "When the PR went out without tests, it caused a prod bug and eroded trust" — not "you're careless." Describe the specific situation and its effect (SBI: Situation-Behavior-Impact).</li>
+<li><strong>Make it a dialogue:</strong> ask for their view, listen — there may be context. Agree on concrete next steps together.</li>
+<li><strong>Follow up</strong> and acknowledge improvement. Avoid the "feedback sandwich" if it muddies the message.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I give it timely, specific, kind and actionable — to help, not to vent. In private and promptly, framed from care. I use Situation-Behavior-Impact: describe the specific situation, the behavior, and its effect — 'the PR went out without tests, it caused a prod bug and eroded trust' — rather than attacking character with 'you're careless.' I make it a dialogue: ask their view and listen, because there's often context, then agree concrete next steps together. I follow up and acknowledge improvement. The aim is that they leave clear on what to change and feeling supported, not ambushed."</div>
+`,
+
+"technical-leadership__onboarding-a-new-developer-effectively": `
+<p class="lead">Good onboarding gets someone productive and confident fast, and signals the team's culture.</p>
+<ul>
+<li><strong>Before/day one:</strong> accounts, access, a working dev environment, and a written setup/README that actually works. Nothing kills momentum like a broken first day.</li>
+<li><strong>Buddy/mentor:</strong> assign a go-to person and schedule regular check-ins; make it safe to ask questions.</li>
+<li><strong>Early win:</strong> a small, real, well-scoped first task (ship to prod in week one) to build confidence and exercise the whole pipeline.</li>
+<li><strong>Ramp context:</strong> architecture overview, domain/business context, team norms (how we review, deploy, communicate); documentation and recorded walkthroughs.</li>
+<li><strong>Feedback both ways:</strong> check in at 30/60/90 days; a fresh pair of eyes also surfaces friction to fix.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I get them productive and confident fast. Before day one I make sure access and a working dev environment are ready with a README that actually works, because a broken first day kills momentum. I assign a buddy with regular check-ins and make it safe to ask anything. I give an early win — a small, real task shipped to prod in the first week — to build confidence and exercise the whole pipeline. I ramp context with an architecture and domain overview and the team norms for review and deploy. And I check in at 30, 60 and 90 days, using their fresh eyes to surface friction worth fixing."</div>
+`,
+
+"technical-leadership__building-ownership-psychological-safety": `
+<p class="lead">High-performing teams need <strong>psychological safety</strong> — people feel safe to speak up, ask, admit mistakes and challenge — and genuine <strong>ownership</strong>.</p>
+<ul>
+<li><strong>Safety:</strong> respond to mistakes with learning not blame (blameless postmortems), admit your own mistakes as a leader, welcome questions and dissent, and never punish the messenger. Google's Project Aristotle found it's the top predictor of team effectiveness.</li>
+<li><strong>Ownership:</strong> give teams real autonomy over how they solve problems (outcomes, not prescriptions), let them make decisions, connect work to impact, and avoid micromanaging. People own what they help shape.</li>
+<li>Trust + autonomy + accountability, with air cover from the leader.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I build psychological safety and ownership together. Safety means people feel safe to speak up, ask, admit mistakes and challenge — so I respond to mistakes with learning not blame through blameless postmortems, admit my own mistakes, welcome dissent, and never punish the messenger. Google's Project Aristotle found it's the top predictor of team effectiveness. Ownership comes from real autonomy: I give teams the outcome and let them decide how, connect the work to impact, and avoid micromanaging — people own what they help shape. It's trust plus autonomy plus accountability, with me providing air cover."</div>
+`,
+
+"technical-leadership__adopting-a-new-tool-tech-build-vs-buy": `
+<p class="lead">A disciplined, evidence-based decision — not resume-driven development.</p>
+<ul>
+<li><strong>Start from the problem:</strong> what need, and does our current stack already solve it? Avoid adopting tech for novelty.</li>
+<li><strong>Build vs buy:</strong> buy/adopt when it's not your core differentiator and a mature option exists (faster, maintained, supported); build when it's core, or no option fits, weighing TCO — licensing vs engineering + maintenance.</li>
+<li><strong>Evaluate:</strong> criteria (fit, maturity, community, support, security, cost, learning curve, lock-in), a small <strong>spike/PoC</strong>, and a trial on a non-critical path.</li>
+<li><strong>De-risk adoption:</strong> introduce gradually, train the team, document, and have an exit path; record the decision (ADR).</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I make it evidence-based, not resume-driven. I start from the problem and check whether our current stack already solves it, to avoid adopting tech for novelty. On build versus buy, I buy or adopt when it isn't our core differentiator and a mature, supported option exists, and build when it's core or nothing fits — weighing total cost of ownership, licensing versus engineering and maintenance. I evaluate against criteria like maturity, support, security, cost and lock-in, run a small spike on a non-critical path, then adopt gradually with training, docs and an exit path, and record the decision in an ADR."</div>
+`,
+
+"technical-leadership__running-an-architecture-design-review": `
+<p class="lead">A design review catches problems cheaply — on paper, before they're built — and spreads context.</p>
+<ul>
+<li><strong>Written proposal first:</strong> a design doc / RFC circulated ahead — context and goals, requirements (incl. non-functional: scale, latency, security), the proposed design, <strong>alternatives considered</strong> and why rejected, risks and trade-offs. Reviewers read before the meeting.</li>
+<li><strong>Right people:</strong> relevant engineers, security, ops/SRE, and affected teams.</li>
+<li><strong>Focus on the hard parts:</strong> interfaces/contracts, data, failure modes, scale, security, and the trade-offs — not nitpicks. Question assumptions.</li>
+<li><strong>Constructive and decisive:</strong> capture decisions, action items and open questions; record the outcome as an <strong>ADR</strong>. Review the design, not the person.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "A design review catches problems on paper before they're built and spreads context. I require a written proposal circulated ahead — context and goals, functional and non-functional requirements like scale and security, the proposed design, the alternatives considered and why rejected, and the risks and trade-offs — so people read before the meeting rather than hearing it cold. I invite the right people: relevant engineers, security, ops, and affected teams. We focus on the hard parts — contracts, data, failure modes, scale, security — and question assumptions, not nitpick. I keep it constructive, capture decisions and open questions, and record the outcome as an ADR."</div>
+`,
+
+"technical-leadership__conducting-a-strong-technical-interview": `
+<p class="lead">A good interview predicts on-the-job performance, is fair and consistent, and sells the candidate on the team.</p>
+<ul>
+<li><strong>Assess real skills:</strong> practical, role-relevant problems (debug/extend real-ish code, design a system, discuss their past work deeply) over trivia or obscure puzzles.</li>
+<li><strong>Structured and consistent:</strong> a defined rubric and the same core questions across candidates, so you compare fairly and reduce bias; score against the rubric, not gut feel.</li>
+<li><strong>Probe depth and reasoning:</strong> ask why, push on trade-offs, "what would you change at 10x scale" — look for how they think, not just the answer.</li>
+<li><strong>Candidate experience:</strong> be respectful, make it a two-way conversation, leave time for their questions — they're evaluating you too.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "A good interview predicts on-the-job performance, is fair and consistent, and sells the team. I assess real, role-relevant skills — debug or extend realistic code, design a system, or go deep on their past work — rather than trivia or obscure puzzles. I keep it structured with a defined rubric and the same core questions across candidates so I compare fairly and reduce bias, scoring against the rubric not gut feel. I probe reasoning — ask why, push on trade-offs, 'what changes at ten times the scale' — because how they think matters more than the one answer. And I protect the candidate experience: respectful, two-way, with time for their questions, since they're evaluating us too."</div>
+`,
+
+"technical-leadership__architecture-decision-records-adrs": `
+<p class="lead">An <strong>ADR</strong> is a short document capturing one significant architectural decision: the context, the decision, and its consequences — so the <em>why</em> survives.</p>
+<ul>
+<li><strong>Structure:</strong> title, status (proposed/accepted/superseded), <em>context</em> (forces and constraints), <em>decision</em> (what we chose), <em>consequences</em> (trade-offs, what it enables/costs), and alternatives considered.</li>
+<li><strong>Why:</strong> future engineers (and future you) know <em>why</em> a choice was made, avoiding re-litigating settled debates or undoing decisions whose rationale was invisible. Onboarding context.</li>
+<li><strong>How:</strong> keep them short, one per decision, stored <em>in the repo</em> next to the code (versioned), immutable — supersede with a new ADR rather than editing.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "An ADR is a short document capturing one significant architectural decision — the context, the decision, and its consequences — so the why survives. Each has a title, a status like accepted or superseded, the context of forces and constraints, the decision, the consequences and trade-offs, and the alternatives considered. The value is that future engineers, including future me, know why a choice was made, so we don't re-litigate settled debates or undo decisions whose rationale was invisible — and it's great onboarding context. I keep them short, one per decision, versioned in the repo next to the code, and immutable: I supersede with a new ADR rather than editing an old one."</div>
+`,
+
+"technical-leadership__managing-technical-debt-register-budget-pay-down": `
+<p class="lead">Technical debt is managed deliberately — made visible, prioritized, and paid down continuously — not ignored until it's a crisis.</p>
+<ul>
+<li><strong>Register:</strong> track debt items explicitly (a backlog/register) with the problem, the impact/pain, and estimated cost — so it's visible, not tribal knowledge.</li>
+<li><strong>Prioritize:</strong> by pain × frequency and risk — the debt that slows delivery or causes incidents, not every imperfection. Not all debt is worth paying.</li>
+<li><strong>Budget:</strong> a steady, protected allocation each sprint (e.g. ~15–20%), plus the boy-scout rule and refactoring the code you're already touching.</li>
+<li><strong>Prevent:</strong> good standards, review, tests and the "definition of done" so new debt is intentional (a logged trade-off), not accidental.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "I manage debt deliberately — visible, prioritized, and paid down continuously, not ignored until it's a crisis. I keep a register of debt items with the problem, the impact and an estimated cost, so it's not tribal knowledge. I prioritize by pain times frequency and risk — the debt that slows delivery or causes incidents, since not every imperfection is worth paying. I protect a steady allocation each sprint, maybe fifteen to twenty percent, plus the boy-scout rule of improving code I'm already in. And I prevent new accidental debt with standards, review, tests and a definition of done, so any debt we take on is an intentional, logged trade-off."</div>
+`,
+
+"technical-leadership__roadmaps-okrs-stakeholder-alignment": `
+<p class="lead">Leadership includes connecting technical work to business outcomes and keeping everyone aligned on direction.</p>
+<ul>
+<li><strong>OKRs:</strong> Objectives (the ambitious qualitative goal) with measurable Key Results (the outcomes that prove it) — align the team's work to a few clear priorities, focus on <em>outcomes</em> not output, and cascade from company to team.</li>
+<li><strong>Roadmap:</strong> a direction-over-time view (now / next / later rather than false-precision dates), tied to objectives — communicates priorities and sequencing to stakeholders without over-promising.</li>
+<li><strong>Alignment:</strong> involve stakeholders in setting priorities, communicate the plan and the <em>why</em>, make trade-offs explicit, and revisit regularly as things change. Keep engineering and business in sync both ways.</li>
+</ul>
+<div class="say"><strong>Say this:</strong> "Part of leadership is connecting technical work to business outcomes and keeping everyone aligned. I use OKRs — an ambitious objective with measurable key results that prove it — to focus the team on a few clear priorities and on outcomes, not output, cascading from company to team. I keep a roadmap as direction over time — now, next, later rather than false-precision dates — tied to those objectives, so stakeholders see priorities and sequencing without me over-promising. And I drive alignment by involving stakeholders in setting priorities, communicating the plan and the why, making trade-offs explicit, and revisiting as things change — keeping engineering and business in sync both ways."</div>
+`,
 };
